@@ -57,8 +57,9 @@ def attention_matrix(States: states, state_idx: (int or str), freq_idx: int, ene
     attention = strength[:, :, None] + strength[:, None, :] if is_all_states \
         else strength[:, None] + strength[None, :]
 
-    if attention.all() == 0:
+    if (attention==0).all():
         print(f"WARNING: All attention values are zero for state {state_idx}. Check if the energy calculations are correct.")
+
 
     return attention
 

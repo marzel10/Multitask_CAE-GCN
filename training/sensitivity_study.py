@@ -1,5 +1,15 @@
 import multiprocessing
+import sys
 import time
+from pathlib import Path
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+for _sub in ("data", "models", "tools", "training", "intermediate_results_check", "results_analysis"):
+    _p = str(_PROJECT_ROOT / _sub)
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 import numpy as np
 
@@ -34,6 +44,7 @@ def _run_in_subprocess(freq, type, raw_features, beta=BETA_CONSTANT):
 def run_pre_processed_sweep(start_freq=0):
     np.random.seed(42)
     for freq in freqs:
+        continue
         if freq < start_freq:
             continue
         if not OPTIMIZE_RAW:
@@ -51,6 +62,7 @@ def run_pre_processed_sweep(start_freq=0):
 def run_raw_sweep(start_freq=0):
     np.random.seed(42)
     for freq in freqs:
+        continue
         if freq < start_freq:
             continue
         if not OPTIMIZE_RAW:

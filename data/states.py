@@ -109,7 +109,7 @@ class states:
         else:
             if s_idx >= self.num_states:
                 raise ValueError(f"Index out of bounds. Max state index: {self.num_states-1}")
-            return self.states[0,s_idx]['Frequency'][0,freq]['Pair_idx'][0,p_idx]['Amplitude']
+            return tf.reshape(tf.squeeze(tf.convert_to_tensor(self.states[0,s_idx]['Frequency'][0,freq]['Pair_idx'][0,p_idx]['Amplitude'])), [-1])
 
         amps = []
         for idx in state_indices:
@@ -129,27 +129,39 @@ class states:
         return tf.reduce_sum(tf.square(amp), axis=dim)
 
     def signal_envelope_peak(self, s_idx, freq, p_idx):
-        amp = np.asarray(self.amplitude(s_idx, freq, p_idx)).reshape(-1)
-        envelope = np.abs(hilbert(amp))
-        return tf.reduce_max(envelope)
+        amp = np.asarray(self.amplitude(s_idx, freq, p_idx))#-self.benchmark_amplitude(s_idx, freq, p_idx))
+        if amp.ndim == 1:
+            envelope = np.abs(hilbert(amp))
+            return tf.reduce_max(envelope)
+        # amp is (num_states, samples) for a batched s_idx (e.g. ":"): one peak per state
+        envelope = np.abs(hilbert(amp, axis=-1))
+        return tf.reduce_max(envelope, axis=-1)
 
-    def signal_envelope_peak_area(self, s_idx, freq, p_idx):
-        amp = np.asarray(self.amplitude(s_idx, freq, p_idx)).reshape(-1)
-        envelope = np.abs(hilbert(amp))
+    def _envelope_area(self, envelope):
         peak_idx = int(np.argmax(envelope))
 
         area = 0.0
         i = peak_idx
-        while i > 0 and envelope[i - 1] <= envelope[i]:
+        env_len = len(envelope)
+        while i > 2 and (envelope[i - 1] <= envelope[i] or envelope[i - 2] <= envelope[i - 1]):
             area += 0.5 * (envelope[i] + envelope[i - 1])
             i -= 1
 
         i = peak_idx
-        while i < len(envelope) - 1 and envelope[i + 1] <= envelope[i]:
+        while i < env_len - 2 and (envelope[i + 1] <= envelope[i] or envelope[i + 2] <= envelope[i + 1]):
             area += 0.5 * (envelope[i] + envelope[i + 1])
             i += 1
 
-        return area * self.dt()
+        return area
+
+    def signal_envelope_peak_area(self, s_idx, freq, p_idx):
+        amp = np.asarray(self.amplitude(s_idx, freq, p_idx))#-self.benchmark_amplitude(s_idx, freq, p_idx))
+        if amp.ndim == 1:
+            envelope = np.abs(hilbert(amp))
+            return self._envelope_area(envelope) * self.dt()
+        # amp is (num_states, samples) for a batched s_idx (e.g. ":"): one area per state
+        envelope = np.abs(hilbert(amp, axis=-1))
+        return np.array([self._envelope_area(row) for row in envelope]) * self.dt()
 
 
     def benchmark_amplitude(self, s_idx, freq, p_idx):
@@ -201,23 +213,32 @@ class states:
         return tf.squeeze(self.states[0,s_idx]['Frequency'][0,freq]['Pair_idx'][0,p_idx]['Time'])
     
     def dt(self):
-        return self.states[0,0]['Frequency'][0,0]['Pair_idx'][0,0]['Time'][1] - self.states[0,0]['Frequency'][0,0]['Pair_idx'][0,0]['Time'][0]
+        time = np.asarray(self.states[0,0]['Frequency'][0,0]['Pair_idx'][0,0]['Time']).reshape(-1)
+        return float(time[1] - time[0])
 
-    def plot(self, s_idx, freq, p_idx, save_path=None):
+    def plot(self, s_idx, freq, p_idx, direction, save_path=None, title=False):
         amp = self.amplitude(s_idx, freq, p_idx)
         benchmark_amp = self.benchmark_amplitude(s_idx, freq, p_idx)
         time = self.time(s_idx, freq, p_idx)
 
+        if direction == 0:
+            #range = [200,1100]
+            range = [0,2000]
+        else:
+            range = [2000,4000]
+
         #square figure
-        plt.figure(figsize=(6, 6))
-        plt.plot(time[2100:3000], amp[2100:3000], label='Amplitude')
-        plt.plot(time[2100:3000], benchmark_amp[2100:3000], label='Benchmark Amplitude')
-        plt.title(f'State {s_idx}, Frequency {freq}, Pair Index {p_idx}')
-        plt.xlabel('Time')
-        plt.ylabel('Amplitude')
-        plt.legend()
-        plt.show()
+        plt.figure(figsize=(10, 10))
+        plt.plot(time[range[0]:range[1]], amp[range[0]:range[1]], label='Amplitude')
+        plt.plot(time[range[0]:range[1]], benchmark_amp[range[0]:range[1]], label='Benchmark Amplitude')
+        if title:
+            plt.title(f'State {s_idx}, Frequency {freq}, Pair Index {p_idx}')
+        plt.xlabel('Time', fontsize=40)
+        #plt.ylabel('Amplitude', fontsize=18)
+        plt.xticks([])
+        plt.yticks([])
+        plt.legend(fontsize=25)
         if save_path is not None:
             plt.savefig(save_path, format='svg', bbox_inches='tight')
-       
+        plt.show()       
 
