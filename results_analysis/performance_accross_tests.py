@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
+from matplotlib.ticker import FuncFormatter
 
 from imagining_alghoritm import P_AE, U, WCPDI
 from plot_panel import _draw_static_panel
@@ -33,7 +34,7 @@ from config import (
 
 ALL_PANELS = BASE_PANELS_SET  # test panels aggregated across in every task below (123 intentionally excluded)
 OUT_DIR = PROJECT_ROOT / "test_panel_performance_results"
-FREQ_LABELS = [f"{f} kHz" for f in FREQUENCY_MAPPING] + ["WAE"]
+FREQ_LABELS = [rf"$HI_{{{f}}} (-)$" for f in FREQUENCY_MAPPING] + [r"$HI_{WAE} (-)$"]
 
 KEY_TO_TITLES = {
     "103": "L1-03", "104": "L1-04", "105": "L1-05", "109": "L1-09", "123": "L1-23",
@@ -48,7 +49,7 @@ def _palette_style(i):
     return color, linestyle
 
 
-_HI_GRID_COLORS = [PALETTE[0], PALETTE[1], PALETTE[2], "#6F4423"]  # blue, orange, light blue from CUSTOM_PALETTE + brown; one fixed color per panel slot (base panels + test panel) in plot_HI_grid_across_tests
+_HI_GRID_COLORS = [PALETTE[i % len(PALETTE)] for i in range(len(ALL_PANELS))]
 
 
 def _base_panels_for(test_panel):
@@ -156,7 +157,7 @@ def plot_HI_grid_across_tests(model_type, out_dir=OUT_DIR):
     for ax in axes[-1, :]:
         ax.set_xlabel("Lifetime (%)", fontsize=15)
     for row in range(n_rows):
-        axes[row, 0].set_ylabel(FREQ_LABELS[row], fontsize=15)
+        axes[row, 0].set_ylabel(FREQ_LABELS[row], fontsize=20)
     for ax in axes.flat:
         ax.tick_params(axis='both', labelsize=15)
 
@@ -178,6 +179,86 @@ def plot_HI_grid_across_tests(model_type, out_dir=OUT_DIR):
     plt.close(fig)
     print(f"Saved: {save_path}")
 
+
+
+def _WAE_HI_curves(test_panel, model_type):
+    '''{panel: WAE HI curve} for one test-panel run (ensemble fold): every panel's per-frequency HI curves
+    combined with that run's fitness-based weights (same weighting as plot_HI_grid_across_tests's WAE row).
+    None if HI.pkl is missing or was written with a different CV scheme.'''
+    HI = _load_pickle(_model_dir(test_panel, model_type) / "HI.pkl")
+    panels = _panels_for(test_panel)
+    fold_idx = _last_fold_idx(HI) if HI is not None else None
+    n_panel_axis = len(HI[fold_idx][0]) if HI is not None else None
+    if HI is None or n_panel_axis != len(panels):
+        reason = "no HI.pkl" if HI is None else f"{n_panel_axis} panels on disk, expected {len(panels)} (different CV scheme)"
+        print(f"[{model_type}][{test_panel}] {reason}, skipping cell")
+        return None
+
+    HI_metrics = _load_pickle(_model_dir(test_panel, model_type) / "HI_metrics.pkl")
+    n_freq = len(HI[fold_idx])
+    if HI_metrics is not None and _last_fold_idx(HI_metrics) == fold_idx:
+        fitness = np.asarray(HI_metrics[fold_idx, :n_freq, 0], dtype=float)
+        with np.errstate(invalid="ignore"):
+            weights = fitness / np.nansum(fitness)
+    else:
+        weights = np.full(n_freq, 1.0 / n_freq)
+
+    curves = {}
+    for panel_idx, panel in enumerate(panels):
+        weighted = [(weights[f] if np.isfinite(weights[f]) else 0.0) * HI[fold_idx][f][panel_idx]
+                    for f in range(n_freq) if HI[fold_idx][f][panel_idx] is not None]
+        if weighted:
+            curves[panel] = np.sum(np.stack(weighted, axis=0), axis=0)
+    return curves
+
+
+def plot_HI_grid_across_models(model_types, out_dir=OUT_DIR):
+    '''
+    One figure, len(model_types) x 4 grid of WAE HI vs lifetime (%): rows are model types, columns are test-panel
+    runs. Each subplot has one line per panel (ensemble model); every panel keeps the same color in every
+    subplot, and the run's held-out test panel is dashed.
+    '''
+    out_dir.mkdir(parents=True, exist_ok=True)
+    n_rows, n_cols = len(model_types), len(ALL_PANELS)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(4 * n_cols, 3 * n_rows), sharex=True, squeeze=False)
+    panel_color = {p: _HI_GRID_COLORS[i % len(_HI_GRID_COLORS)] for i, p in enumerate(ALL_PANELS)}
+
+    for row, model_type in enumerate(model_types):
+        for col, test_panel in enumerate(ALL_PANELS):
+            ax = axes[row, col]
+            curves = _WAE_HI_curves(test_panel, model_type)
+            if not curves:
+                ax.text(0.5, 0.5, "no data", ha="center", va="center", transform=ax.transAxes, fontsize=15)
+            else:
+                for panel, curve in curves.items():
+                    is_test = panel == test_panel
+                    # only solid lines get a legend label, so each panel's legend entry is its solid line
+                    ax.plot(np.linspace(0, 100, curve.shape[0]), curve, color=panel_color[panel],
+                            linestyle="-" if is_test else "--", linewidth=2.5 if is_test else 1.5, label="_nolegend_" if is_test else KEY_TO_TITLES.get(panel, panel))
+            if row == 0:
+                ax.set_title(KEY_TO_TITLES.get(test_panel, test_panel), fontsize=15)
+            ax.grid(True)
+        axes[row, 0].set_ylabel(rf"$HI_{{{TYPES_LABELS.get(model_type, model_type)}}} (-)$", fontsize=20)
+
+    for ax in axes[-1, :]:
+        ax.set_xlabel("Lifetime (%)", fontsize=15)
+    for ax in axes.flat:
+        ax.tick_params(axis='both', labelsize=15)
+
+    axes[0, 0].plot([], [], color="gray", linestyle="-", label="Test panel")  # empty line, only for the legend entry
+    handles_by_label = {}
+    for ax in axes.flat:
+        for h, l in zip(*ax.get_legend_handles_labels()):
+            handles_by_label.setdefault(l, h)
+    labels = [l for l in [KEY_TO_TITLES.get(p, p) for p in ALL_PANELS] + ["Test panel"] if l in handles_by_label]
+    fig.legend([handles_by_label[l] for l in labels], labels, fontsize=15, loc="lower center",
+               bbox_to_anchor=(0.5, 0.0), ncol=len(labels))
+
+    fig.tight_layout(rect=[0, 0.06, 1, 1])
+    save_path = out_dir / "HI_grid_WAE_across_models.svg"
+    fig.savefig(save_path, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved: {save_path}")
 
 # ===========================================================================
 # Task 2.1 / 2.2 -- HI_metrics.xlsx, sheets "all" and "test"
@@ -278,9 +359,9 @@ def _sHI_avg_over_freq(sHI, test_panel, panel):
 
 
 def _normalize_maps(maps):
-    '''normalizes every WCPDI map in `maps` to [0, 1] using the global min/max across all maps.'''
-    stacked = np.stack(list(maps.values()), axis=0)
-    vmin, vmax = np.nanmin(stacked), np.nanmax(stacked)
+    '''normalizes every WCPDI map in `maps` using the global max across all maps and the global min across all frames except the end-of-life one'''
+    stacked = np.stack([maps[frac] for frac in sorted(maps)], axis=0)
+    vmin, vmax = np.nanmin(stacked[:-1]), np.nanmax(stacked[1:])
     if vmax > vmin:
         return {frac: (m - vmin) / (vmax - vmin) for frac, m in maps.items()}
     return {frac: np.zeros_like(m) for frac, m in maps.items()}
@@ -320,40 +401,85 @@ def _damage_map_grid_for_path(sHI, test_panel, panel, life_fractions, n_pixels, 
     return maps
 
 
-def plot_damage_map_grid_across_tests(model_type, out_dir=OUT_DIR, n_pixels=DAMAGE_MAP_N_PIXELS,
-                                       life_fractions=LIFETIME_FRACTIONS, normalize=False):
-    '''One figure per model_type: rows are test panels, columns are life fractions.
-    For GCN types, the damage maps are read from damage_maps.pkl (already averaged over frequency, see
-    graph_performance.compute_all); "path" is recomputed from sHI.pkl (Task 3).'''
-    out_dir.mkdir(parents=True, exist_ok=True)
-    n_rows, n_cols = len(ALL_PANELS), len(life_fractions)
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(4 * n_cols, 4 * n_rows), squeeze=False)
+def _load_damage_maps(test_panel, model_type, life_fractions, n_pixels):
+    '''{life_fraction: raw WCPDI map} for one (test run, model type), or None if its pickle is missing.
+    GCN types read damage_maps.pkl (already averaged over frequency, see graph_performance.compute_all);
+    "path" is recomputed from sHI.pkl.'''
+    panel_int = int(test_panel)
+    if model_type == "path":
+        sHI = _load_pickle(_model_dir(test_panel, model_type) / "sHI.pkl")
+        if sHI is None:
+            print(f"[path][{test_panel}] no sHI.pkl, skipping row")
+            return None
+        return _damage_map_grid_for_path(sHI, test_panel, test_panel, life_fractions, n_pixels)
+    damage_maps = _load_pickle(_model_dir(test_panel, model_type) / "damage_maps.pkl")
+    if damage_maps is None:
+        print(f"[{model_type}][{test_panel}] no damage_maps.pkl, skipping row")
+        return None
+    return damage_maps[-1].get(panel_int)
 
-    maps_by_row = []
-    for test_panel in ALL_PANELS:
-        panel_int = int(test_panel)
-        if model_type == "path":
-            sHI = _load_pickle(_model_dir(test_panel, model_type) / "sHI.pkl")
-            maps = _damage_map_grid_for_path(sHI, test_panel, test_panel, life_fractions, n_pixels, normalize=normalize) if sHI is not None else None
-            if sHI is None:
-                print(f"[path][{test_panel}] no sHI.pkl, skipping row")
+
+def _int_ticks_within(lo, hi, n=4):
+    '''n integer colorbar ticks inside [lo, hi]. Plain rounding could push the end ticks just outside the range,
+    which makes matplotlib stretch the colorbar axis and leaves an uncoloured gap at that end.'''
+    lo_i, hi_i = int(np.ceil(lo)), int(np.floor(hi))
+    if lo_i >= hi_i:  # range narrower than one unit -- integers can't label it, keep the exact values
+        return np.linspace(lo, hi, n)
+    return np.unique(np.round(np.linspace(lo_i, hi_i, n)).astype(int))
+
+
+def _compact_tick_label(v, _pos=None):
+    '''Short colorbar label: -3900 -> "-3.9k", -29243 -> "-29k", -1234567 -> "-1.2M". Long labels matter because
+    tight_layout makes every gap between columns as wide as the widest colorbar label in the figure needs.'''
+    if abs(v) >= 1e6:
+        return f"{v / 1e6:.1f}M"
+    if abs(v) >= 1e4:
+        return f"{v / 1e3:.0f}k"
+    if abs(v) >= 1e3:
+        return f"{v / 1e3:.1f}k"
+    return f"{v:.0f}" if float(v).is_integer() else f"{v:.2g}"
+
+
+def _plot_damage_map_grid(rows, save_path, life_fractions, normalize, robust_scale=True):
+    '''Draws one damage-map figure: `rows` is a list of (row_label, panel_int, maps), columns are life fractions.
+    robust_scale: the middle frames' shared scale spans the 25th percentile of the per-frame minima to the 75th
+    percentile of the per-frame maxima, so a few extreme frames saturate instead of washing out the rest (False = overall min/max)'''
+    n_rows, n_cols = len(rows), len(life_fractions)
+    # size columns to the panel's aspect so the maps aren't padded by empty space; columns that carry
+    # their own vertical colorbar get extra width for it
+    cell_h = 4
+    cell_w = 1.05 * cell_h * PANEL_W / PANEL_H  # a little wider than the panel aspect to leave room for the gaps between maps
+    has_own_cbar = [not normalize or col in (0, n_cols - 1) for col in range(n_cols)]
+    # the map is pinned against its colorbar, so any surplus width shows up as a gap on the map's left
+    width_ratios = [1.3 if own else 1.0 for own in has_own_cbar]
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(cell_w * sum(width_ratios) + 1, cell_h * n_rows),
+                             gridspec_kw={"width_ratios": width_ratios}, squeeze=False)
+
+    def _add_colorbar(im_cell, ax):
+        cbar = fig.colorbar(im_cell, ax=ax, fraction=0.046, pad=0.04)
+        cbar.ax.set_title(r"$\Psi (-)$", fontsize=20, loc="left", pad=12)
+        cbar.set_ticks(_int_ticks_within(*im_cell.get_clim()))
+        cbar.ax.yaxis.set_major_formatter(FuncFormatter(_compact_tick_label))
+        cbar.ax.tick_params(labelsize=20)
+
+    # normalize=True: first and last frames keep their own scale, the middle frames of a row share one
+    # raw scale (see robust_scale) with one horizontal colorbar spanning the middle cells
+    mid_cols = range(1, n_cols - 1) if normalize else range(0)
+    row_ims = {}
+
+    for row, (row_label, panel_int, maps) in enumerate(rows):
+        mid_vals = [maps[life_fractions[c]] for c in mid_cols if maps is not None and life_fractions[c] in maps]
+        if not mid_vals:
+            row_vmin, row_vmax = None, None
+        elif robust_scale:
+            row_vmin = np.percentile([np.nanmin(m) for m in mid_vals], 25)
+            row_vmax = np.percentile([np.nanmax(m) for m in mid_vals], 75)
         else:
-            damage_maps = _load_pickle(_model_dir(test_panel, model_type) / "damage_maps.pkl")
-            maps = damage_maps[-1].get(panel_int) if damage_maps is not None else None
-            if damage_maps is None:
-                print(f"[{model_type}][{test_panel}] no damage_maps.pkl, skipping row")
-            elif normalize and maps is not None:
-                maps = _normalize_maps(maps)
-                
-        maps_by_row.append(maps)
-
-    vmin, vmax = (0.0, 1.0) if normalize else (None, None)
-
-    im = None
-    for row, test_panel in enumerate(ALL_PANELS):
-        panel_int = int(test_panel)
-        maps = maps_by_row[row]
+            row_vmin, row_vmax = np.nanmin(mid_vals), np.nanmax(mid_vals)
+        row_im = None
         for col, frac in enumerate(life_fractions):
+            is_mid = col in mid_cols
+            vmin, vmax = (row_vmin, row_vmax) if is_mid else (None, None)
             ax = axes[row][col]
             if row == 0:
                 ax.set_title(f"{frac:.0%} lifetime", fontsize=20)
@@ -362,35 +488,67 @@ def plot_damage_map_grid_across_tests(model_type, out_dir=OUT_DIR, n_pixels=DAMA
             if maps is None or frac not in maps:
                 ax.text(0.5, 0.5, "no data", ha="center", va="center", transform=ax.transAxes, fontsize=20)
                 if col == 0:
-                    ax.set_ylabel(KEY_TO_TITLES.get(test_panel, test_panel), fontsize=18)
+                    ax.set_ylabel(row_label, fontsize=18)
                 continue
             m = maps[frac]
             _draw_static_panel(ax, panel_int)  # sets its own "y (m)" ylabel -- must set ours after, not before
-            im = ax.imshow(m.T, extent=(0, PANEL_W, 0, PANEL_H), origin="lower", cmap=CMAP_HEATMAP, vmin=vmin, vmax=vmax)
-            if not normalize:
-                cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-                cbar.ax.set_title(r"$\Psi (-)$", fontsize=20, loc="left", pad=12)
-                cbar.set_ticks(np.round(np.linspace(*im.get_clim(), 4)).astype(int))
-                cbar.ax.tick_params(labelsize=20)
+            im_cell = ax.imshow(m.T, extent=(0, PANEL_W, 0, PANEL_H), origin="lower", cmap=CMAP_HEATMAP, vmin=vmin, vmax=vmax)
+            if not is_mid:
+                _add_colorbar(im_cell, ax)
+            else:
+                row_im = im_cell
             if col == 0:
-                ax.set_ylabel(KEY_TO_TITLES.get(test_panel, test_panel), fontsize=20)
+                ax.set_ylabel(row_label, fontsize=20)
+        if row_im is not None:
+            row_ims[row] = row_im
 
-    if normalize:
-        fig.tight_layout(rect=[0, 0.06, 1, 1])
-        if im is not None:
-            cax = fig.add_axes([0.15, 0.02, 0.7, 0.02])
-            cbar = fig.colorbar(im, cax=cax, orientation="horizontal")
-            cbar.ax.set_title(r"$\Psi (-)$", fontsize=20, loc="left", pad=12)
-            cbar.set_ticks(np.round(np.linspace(*im.get_clim(), 4)).astype(int))
+    fig_h = fig.get_figheight()
+    if row_ims:
+        # leave room under every row for its horizontal colorbar and tick labels
+        fig.tight_layout(h_pad=3.5, rect=[0, 0.6 / fig_h, 1, 1])
+        cbar_h, cbar_gap = 0.15 / fig_h, 0.15 / fig_h  # inches -> figure fraction
+        for row, row_im in row_ims.items():
+            first_ax, last_ax = axes[row][mid_cols[0]], axes[row][mid_cols[-1]]
+            first_ax.apply_aspect()  # imshow shrinks the axes to the data aspect; use the drawn box
+            last_ax.apply_aspect()
+            x0, x1 = first_ax.get_position().x0, last_ax.get_position().x1
+            y0 = min(axes[row][c].get_position().y0 for c in mid_cols)
+            cax = fig.add_axes([x0, y0 - cbar_gap - cbar_h, x1 - x0, cbar_h])
+            # arrowheads mark that values beyond the robust range are shown in the end colors
+            cbar = fig.colorbar(row_im, cax=cax, orientation="horizontal", extend="both" if robust_scale else "neither")
+            # the arrowhead sticks out 5% of the bar's length past its end, so the label sits beyond it
+            cax.text(1.06 if robust_scale else 1.01, 0.5, r"$\Psi (-)$", transform=cax.transAxes, ha="left", va="center", fontsize=20)
+            cbar.set_ticks(_int_ticks_within(*row_im.get_clim()))
+            cbar.ax.xaxis.set_major_formatter(FuncFormatter(_compact_tick_label))
             cbar.ax.tick_params(labelsize=20)
-        save_path = out_dir / f"damage_map_grid_{model_type}.svg"
     else:
         fig.tight_layout()
-        save_path = out_dir / f"damage_map_grid_{model_type}_not_normalized.svg"
 
-    fig.savefig(save_path)
+    fig.savefig(save_path, bbox_inches="tight")  # tight_layout can leave the row labels just off the canvas; this keeps them in
     plt.close(fig)
     print(f"Saved: {save_path}")
+
+
+def plot_damage_map_grid_across_tests(model_type, out_dir=OUT_DIR, n_pixels=DAMAGE_MAP_N_PIXELS,
+                                       life_fractions=LIFETIME_FRACTIONS, normalize=False):
+    '''One figure per model_type: rows are test panels, columns are life fractions (Task 3).'''
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rows = [(KEY_TO_TITLES.get(test_panel, test_panel), int(test_panel),
+             _load_damage_maps(test_panel, model_type, life_fractions, n_pixels))
+            for test_panel in ALL_PANELS]
+    suffix = "" if normalize else "_not_normalized"
+    _plot_damage_map_grid(rows, out_dir / f"damage_map_grid_{model_type}{suffix}.svg", life_fractions, normalize)
+
+
+def plot_damage_map_grid_across_models(test_panel, model_types, out_dir=OUT_DIR, n_pixels=DAMAGE_MAP_N_PIXELS,
+                                        life_fractions=LIFETIME_FRACTIONS, normalize=False):
+    '''One figure per test panel: rows are model types, columns are life fractions (Task 3).'''
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rows = [(TYPES_LABELS.get(model_type, model_type), int(test_panel),
+             _load_damage_maps(test_panel, model_type, life_fractions, n_pixels))
+            for model_type in model_types]
+    suffix = "" if normalize else "_not_normalized"
+    _plot_damage_map_grid(rows, out_dir / f"damage_map_grid_{test_panel}{suffix}.svg", life_fractions, normalize)
 
 
 
@@ -404,10 +562,10 @@ def plot_fitness_vs_freq_across_tests(out_dir=OUT_DIR):
     out_dir.mkdir(parents=True, exist_ok=True)
     n_freq = len(FREQUENCY_MAPPING)
     series = {key: np.full((len(ALL_PANELS), n_freq + 1), np.nan)
-              for key in ("geometry", "geometry_test", "path", "path_test")}
+              for key in ("peak", "peak_test", "path", "path_test")}
 
     for t_idx, test_panel in enumerate(ALL_PANELS):
-        for model_type, all_key, test_key in [("geometry", "geometry", "geometry_test"), ("path", "path", "path_test")]:
+        for model_type, all_key, test_key in [("peak", "peak", "peak_test"), ("path", "path", "path_test")]:
             model_dir = _model_dir(test_panel, model_type)
 
             HI_metrics = _load_pickle(model_dir / "HI_metrics.pkl")
@@ -426,10 +584,10 @@ def plot_fitness_vs_freq_across_tests(out_dir=OUT_DIR):
 
     x = np.arange(len(FREQ_LABELS))
     fig, ax = plt.subplots(figsize=(9, 5))
-    plot_labels = {"geometry": "GCN (geometry) Fitness", "geometry_test": "GCN (geometry) Fitness (test)",
-                   "path": "Path AE ensemble Fitness", "path_test": "Path AE ensemble Fitness (test)"}
+    plot_labels = {"peak": "CAE-GCN Fitness", "peak_test": "CAE-GCN Fitness (test)",
+                   "path": "CAE Fitness", "path_test": "CAE Fitness (test)"}
     with np.errstate(all="ignore"):
-        for i, key in enumerate(["geometry", "geometry_test", "path", "path_test"]):
+        for i, key in enumerate(["peak", "peak_test", "path", "path_test"]):
             is_test = key.endswith("_test")
             color, _ = _palette_style(i // 2)
             avg = np.nanmean(series[key], axis=0)
@@ -529,9 +687,13 @@ def main():
     for model_type in MODEL_TYPES:  # for CAE, CAE-GCN and GCN      
         plot_HI_grid_across_tests(model_type)  # Task 1
 
-        plot_damage_map_grid_across_tests(model_type, normalize=False)  # Task 3
-       
-    plot_fitness_vs_freq_across_tests()  # Task 4
+        plot_damage_map_grid_across_tests(model_type, normalize=True)  # Task 3
+
+    plot_HI_grid_across_models(["path", "peak", "raw"])
+    for test_panel in ALL_PANELS:
+        
+        plot_damage_map_grid_across_models(test_panel, ["path", "peak", "raw"], normalize=True)  # Task 3, per test panel
+
     
     plot_WAE_fitness_vs_types_across_tests(types=MODEL_TYPES, file_tag="adjacency")  # Task 5
     
