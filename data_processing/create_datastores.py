@@ -11,7 +11,7 @@ from pathlib import Path
 import warnings
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data", "models", "tools", "training", "intermediate_results_check", "results_analysis"):
+for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
     _p = str(_PROJECT_ROOT / _sub)
     if _p not in sys.path:
         sys.path.insert(0, _p)

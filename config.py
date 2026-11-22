@@ -21,7 +21,7 @@ TEST_RUN_DIR = test_run_dir(TEST_PANEL[0])  # every result that depends on which
 DEBUG_MODE = False
 
 # Data directories -- shared/reusable across every TEST_PANEL run, not nested under TEST_RUN_DIR
-DATA_DIR = PROJECT_ROOT / "data"                                                # raw states directory used by mat_file_path()
+DATA_DIR = PROJECT_ROOT / "data_processing"                                     # raw states (.mat) directory used by mat_file_path()
 FEATURES_CACHE_DIR = PROJECT_ROOT / "features_cache"                            # create_datastores.py saves there pre computed features from raw states (AE input) -- a function of panel/freq/path only, same regardless of TEST_PANEL
 
 # Everything below depends on TEST_PANEL (training uses BASE_PANELS, which

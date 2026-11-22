@@ -20,9 +20,9 @@ Tested with Python 3.12. Create a fresh environment and install the pinned depen
 The raw guided wave datasets are not stored in this repository. Download them from Zenodo:
 [https://doi.org/10.5281/zenodo.24448022](https://doi.org/10.5281/zenodo.24448022)
 
-Place all 12 `.mat` files directly in the `data/` folder (path set by `DATA_DIR` in `config.py`):
+Place all 12 `.mat` files directly in the `data_processing/` folder (path set by `DATA_DIR` in `config.py`):
 
-    data/
+    data_processing/
     ├── States_103.mat
     ├── States_104.mat
     ├── States_105.mat
@@ -36,7 +36,7 @@ Place all 12 `.mat` files directly in the `data/` folder (path set by `DATA_DIR`
     ├── States_123_43.mat
     └── States_123_44.mat
 
-All files are required: `data/create_datastores.py` loads every panel when it is imported.
+All files are required: `data_processing/create_datastores.py` loads every panel when it is imported.
 
 ## Running the workflow
 
@@ -57,7 +57,7 @@ runs for different test panels are computed separately.
 
 ## Source folders
 
-### `tools/`
+### `train_and_eval_helpers/`
 Core, reusable SHM building blocks: sensor-network graph construction, the WCPDI
 damage-imaging algorithm, sHI extraction from trained autoencoders, prognostic-criteria
 metrics, and the shared panel-drawing primitive other plots build on.
@@ -67,7 +67,7 @@ metrics, and the shared panel-drawing primitive other plots build on.
 - `prognostic_criteria.py` — Defines the monotonicity, trendability, and prognosability criterion functions used to score health-index quality.
 - `plot_panel.py` — Defines `plot_panel_with_paths`/`_draw_static_panel` to draw the PZT panel with sensors, damage point, and optionally active sensor paths; the shared backdrop other plotting scripts draw on top of.
 
-### `data/`
+### `data_processing/`
 Loads raw `.mat` sensor signal data (`States_<panel>.mat`) and turns it into the
 TensorFlow/PyTorch-Geometric datasets (feature vectors and path-graphs) consumed by the
 AE and GCN models.
