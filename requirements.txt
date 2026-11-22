@@ -1,0 +1,28 @@
+# Tested with Python 3.12.10 on Windows (CPU-only).
+# Versions are pinned to the environment used to produce the thesis results.
+
+# Core numerics / data
+numpy==1.26.4
+scipy==1.15.2
+pandas==2.2.3
+h5py==3.14.0
+openpyxl==3.1.5          # pandas .xlsx read/write
+scikit-learn==1.7.0
+
+# Plotting / graphs
+matplotlib==3.10.3
+networkx==3.6.1
+
+# Autoencoders (TensorFlow / Keras)
+tensorflow==2.21.0
+keras==3.13.2
+tensorflow-probability==0.25.0
+keras-tuner==1.4.8
+
+# GCN (PyTorch / PyTorch Geometric)
+# pip installs the default torch build; for a GPU build see https://pytorch.org/get-started/locally/
+torch==2.10.0
+torch-geometric==2.7.0
+
+# Utilities
+psutil==7.0.0
