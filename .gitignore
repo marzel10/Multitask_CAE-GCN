@@ -13,20 +13,23 @@ venv/
 *.mex*
 *.mlapp~
 slprj/
+*.mat
 
 # Trained model binaries
 *.h5
 *.pt
-*.mat
 *.npy
 *.keras
+*.mat
 
 
 # Databese files
 *.csv
 *.txt
+!requirements.txt
 *.json
 *.pkl
+*.xlsx
 
 # Output directories
 Model_for_every_path/
@@ -42,10 +45,10 @@ beta_paper
 *.png
 *.gif
 *.fig
-
+*.svg
 
 # Articles
-.pdf
+*.pdf
 
 # Logs and temp files
 progress_logger.txt
@@ -66,3 +69,4 @@ desktop.ini
 
 # Memory system (Claude Code internal)
 memory/
+
