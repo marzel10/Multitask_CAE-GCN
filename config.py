@@ -96,7 +96,7 @@ OPTIMIZED_TYPES = [ "peak", "peak_and_area", "peak_only", "geometry_only", "peak
 
 
 OPTIMIZE_RAW = True  # Whether to optimize the GCN with raw features (no AE) as well
-LIFETIME_FRACTIONS = [0, 0.25, 0.5, 0.75, 1.0]  # Used by: performance_accross_tests.py, L1_23_performance_evaluation.py
+LIFETIME_FRACTIONS = [0,0.25,  0.5, 0.75,  0.9, 0.95, 1.0] #[0,0.05, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 0.95, 1.0]  # Used by: performance_accross_tests.py, L1_23_performance_evaluation.py
 # ===========================================================================
 # Damage metric evaluation constants
 # ===========================================================================
@@ -172,7 +172,7 @@ LR = 0.001  # Learning rate for Adam optimizer. Used by: , BO_AE.py
 MAX_TRIALS_AE = 30
 MAX_TRIALS_GCN = 30
 CNN_FIXED_LATENT_DIM = 24
-DAMAGE_LOSS_WEIGHT = 0.01  # small fixed weight; damage_map_loss is unbounded, fitness is ~0-3 -- check magnitudes and adjust. Used by: BO.py, GCN_train.py
+DAMAGE_LOSS_WEIGHT = 0.1  # small fixed weight; damage_map_loss is unbounded, fitness is ~0-3 -- check magnitudes and adjust. Used by: BO.py, GCN_train.py
 ENABLE_DAMAGE_LOSS = True  # Whether to include the damage_map_loss term in the GCN's loss function. Used by: BO.py, GCN_train.py
 ENABLE_PATH_LOSS = True
 ENABLE_GLOBAL_LOSS = True  # Whether to include the global_loss term in the GCN's loss function. Used by: BO.py, GCN_train.py
@@ -185,10 +185,12 @@ CMAP_DIVERGING = "plasma"     # plot_panel.py, damage_map.py
 CMAP_BLUES = "Blues"          # visualize_crossing_graph.py, weight_matrix.py
 
 palette_rgb = [
-    (21, 96, 130), (233, 113, 50), (166, 202, 236),   # dark teal-blue, orange, light blue (original)
-    (10, 61, 82), (166, 78, 31),                       # navy, burnt orange (darker shades)
-    (120, 168, 178), (247, 178, 120),                  # steel teal, peach (mid/light tints)
-    (90, 130, 90),                                     # muted sage accent
+    (0, 0, 255),     # blue
+    (255, 0, 0),     # red
+    (0, 128, 0),     # green
+    (255, 165, 0),   # orange
+    (0, 0, 0),       # black
 ]
 CUSTOM_PALETTE = [(r / 255, g / 255, b / 255) for r, g, b in palette_rgb]
+_LINESTYLES = ["-", "--", ":", "-."]
 
