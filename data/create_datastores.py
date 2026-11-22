@@ -57,39 +57,10 @@ f_103, f_104, f_105, f_109, f_123_1, f_123_2, f_123_31, f_123_32, f_123_41, f_12
 sampling_rate = 1 / st_103.dt() # every sample rate is the same across panels, so just use 103's dt() 
     
 
-def prepare_simple_dataset(path_i, freq_i, panel_name,batch_size=1,include_benchmark=False):
-    if freq_i >= states_list[0].num_freq or path_i >= states_list[0].num_pair:
-        raise ValueError(f"Index out of bounds. Max frequency index: {states_list[0].num_freq-1}, max pair index: {states_list[0].num_pair-1}")
-    if panel_name.startswith("123"):
-        # For panel 123, we concatenate all states from the 4 sub-panels
-        
-            f_idx = np.where(np.array(ds_names) == "123_1")[0]
-            for f in features_list[f_idx[0]:f_idx[0]+8]:
-                feat = f.extract_all_features(":", freq_i, path_i, sample_rate=sampling_rate, cache_dir=str(FEATURES_CACHE_DIR))
-                if include_benchmark:
-                    feat_bench = f.extract_all_features(":", freq_i, path_i, sample_rate=sampling_rate, benchmark=True, cache_dir=str(FEATURES_CACHE_DIR))
-                    feat = np.stack([feat, feat_bench], axis=-1)
-                if 'full_feat' not in locals():
-                    full_feat = feat
-                else:
-                    full_feat = np.concatenate([full_feat, feat], axis=0)
-            ds = make_ds_features(full_feat, full_feat.shape[0], batch_size=batch_size)
-            return ds
-        
-    # For panels 103, 104, 105, 109, we just use the single corresponding state file.
-    else:
-
-        f_idx = np.where(np.array(ds_names) == panel_name)[0]
-        f = features_list[f_idx[0]]
-        feat = f.extract_all_features(":", freq_i, path_i, sample_rate=sampling_rate, cache_dir=str(FEATURES_CACHE_DIR))
-        if include_benchmark:
-            feat_bench = f.extract_all_features(":", freq_i, path_i, sample_rate=sampling_rate, benchmark=True, cache_dir=str(FEATURES_CACHE_DIR))
-            feat = np.stack([feat, feat_bench], axis=-1)
-        ds = make_ds_features(feat, feat.shape[0], batch_size=batch_size)
-        return ds
         
 
-def prepare_datastores(path_i, freq_i, base_batch_size, test_batch_size, train_ds_names, val_ds_names, test_ds_names, include_benchmark=False, diff_bench=False):
+def prepare_datastores(path_i, freq_i, base_batch_size, test_batch_size, train_ds_names, val_ds_names, test_ds_names, include_benchmark=False, diff_bench=False, bench_123_from_103=False):
+    '''bench_123_from_103: if True (and include_benchmark), every L1-23 subpanel uses panel L1-03's baseline instead of its own'''
     if freq_i >= states_list[0].num_freq or path_i >= states_list[0].num_pair:
         raise ValueError(f"Index out of bounds. Max frequency index: {states_list[0].num_freq-1}, max pair index: {states_list[0].num_pair-1}")
     
@@ -100,10 +71,15 @@ def prepare_datastores(path_i, freq_i, base_batch_size, test_batch_size, train_d
     if include_benchmark:
         bench_list = []
 
-    for f in features_list:
+    for name, f in zip(ds_names, features_list):
         feat = f.extract_all_features(":", freq_i, path_i, sample_rate=sampling_rate, benchmark=False, cache_dir=str(FEATURES_CACHE_DIR))
         if include_benchmark:
-            feat_bench = f.extract_all_features(":", freq_i, path_i, sample_rate=sampling_rate, benchmark=True, cache_dir=str(FEATURES_CACHE_DIR))
+            if bench_123_from_103 and name.startswith("123"):
+                # take L1-03's first baseline and repeat it once per state of this L1-23 subpanel
+                bench_103 = np.asarray(f_103.extract_all_features(":", freq_i, path_i, sample_rate=sampling_rate, benchmark=True, cache_dir=str(FEATURES_CACHE_DIR)))
+                feat_bench = np.repeat(bench_103[:1], np.shape(feat)[0], axis=0)
+            else:
+                feat_bench = f.extract_all_features(":", freq_i, path_i, sample_rate=sampling_rate, benchmark=True, cache_dir=str(FEATURES_CACHE_DIR))
             if diff_bench:
                 # The feature is the difference between the signal and benchmark features
                 feat = feat - feat_bench

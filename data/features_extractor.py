@@ -396,6 +396,27 @@ class FeaturesExtractor(states):
 
             return out
 
+def extract_diff_features_with_baseline(extractor, baseline_extractor, freq, sample_rate, out_dir, cache_dir=None):
+    '''Same as extractor.extract_all_features(":", freq, ":", diff=True), but subtracting the baseline of another
+    panel (`baseline_extractor`, e.g. L1-03) instead of the panel's own.'''
+    out_file = Path(out_dir) / f"{Path(extractor.mat_file).stem}_freq{freq}_all_paths_diff_full.npy"
+    if out_file.exists():
+        return np.load(str(out_file))
+
+    all_features = []
+    for p in range(0, 28):
+        features_p = extractor.extract_all_features(":", freq, p_idx=p, sample_rate=sample_rate, benchmark=False, cache_dir=cache_dir)
+        baseline_p = baseline_extractor.extract_all_features(":", freq, p_idx=p, sample_rate=sample_rate, benchmark=True, cache_dir=cache_dir)
+        baseline_p = np.repeat(np.asarray(baseline_p)[:1], np.shape(features_p)[0], axis=0)
+        all_features.append(features_p - baseline_p)
+    all_features = np.stack(all_features, axis=0)  # (n_paths, n_states, n_features)
+
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+    np.save(str(out_file), all_features)
+    print(f"Saved diff features (baseline: {Path(baseline_extractor.mat_file).stem}) to {out_file}")
+    return all_features
+
+
 def pre_compute_features_for_all_panels():
     for freq in range(0, 6):
         for panel_name in BASE_PANELS + PANEL_123_SUBPANELS:

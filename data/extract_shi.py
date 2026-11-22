@@ -26,7 +26,7 @@ from AE_train import monotonicity_loss
 from create_datastores import prepare_datastores
 from config import  GRAPH_DATA_DIR, ALL_BASE_PANELS, TEST_RUN_DIR, CV_PANELS, CV_PANELS_INT, DEBUG_MODE
 
-def extract_shi(folders, freq, dataset, fold,GAN_dir=str(TEST_RUN_DIR)):
+def extract_shi(folders, freq, dataset, fold,GAN_dir=str(TEST_RUN_DIR), bench_123_from_103=False):
     '''
     Extract sHI values from the trained autoencoder models for a given dataset and frequency.
     inputs:
@@ -34,6 +34,7 @@ def extract_shi(folders, freq, dataset, fold,GAN_dir=str(TEST_RUN_DIR)):
     - freq: frequency index to extract sHI for (e.g. 3)
     - dataset: dataset/panel number to extract sHI for (e.g. '104')
     - GAN_dir: base directory where the folders are located
+    - bench_123_from_103: if True, panel 123 uses panel L1-03's baseline (see create_datastores.prepare_datastores)
 
     outputs:
     - latents_all: list of numpy arrays, each containing the sHI values for a path (shape: n_states x 1)
@@ -76,7 +77,7 @@ def extract_shi(folders, freq, dataset, fold,GAN_dir=str(TEST_RUN_DIR)):
             _, _, _, ds_dict, *_rest = prepare_datastores(
                 path_i=path, freq_i=freq, base_batch_size=16, test_batch_size=1,
                 train_ds_names=train_ds_names, val_ds_names=[str(fold)], test_ds_names=[dataset],
-                include_benchmark=True,
+                include_benchmark=True, bench_123_from_103=bench_123_from_103,
             )
             ds = ds_dict[dataset]
             # Get the sHI (shape: n_states x 1) and latent space (shape: n_states x latent_dim) values from the model

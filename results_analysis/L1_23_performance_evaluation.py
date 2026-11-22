@@ -44,21 +44,21 @@ if str(_PROJECT_ROOT) not in sys.path:
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
 import tensorflow as tf
 import torch
 import torch_geometric
 
 from graph_dataset import Panel_GraphDataset, features_GraphDataset
+from features_extractor import FeaturesExtractor, extract_diff_features_with_baseline
 from extract_shi import extract_shi
 from create_datastores import prepare_datastores
 from path_performance import _collect_ensemble_DI, CUSTOM_OBJECTS as AE_CUSTOM_OBJECTS
-from performance_accross_tests import _normalize_maps
+from performance_accross_tests import _plot_damage_map_grid
 from imagining_alghoritm import P_AE, U, WCPDI
 from plot_panel import _draw_static_panel
 from prognostic_criteria import monotonicity_criterion, trendability_criterion, prognosability_criterion
 from config import (
-    PROJECT_ROOT, SINGLE_FILE_PANELS, FREQUENCY_MAPPING, FREQ_LABELS, METRIC_NAMES, TYPES_LABELS,
+    PROJECT_ROOT, SINGLE_FILE_PANELS, FREQUENCY_MAPPING, PANEL_123_SUBPANELS, FEATURES_CACHE_DIR, mat_file_path, FREQ_LABELS, METRIC_NAMES, TYPES_LABELS,
     LIFETIME_FRACTIONS, DAMAGE_MAP_N_PIXELS, PANEL_W, PANEL_H, CMAP_HEATMAP,
     CUSTOM_PALETTE as PALETTE, _LINESTYLES, SINGLE_FILE_PANELS as TEST_PANEL_MODELS
 )
@@ -69,6 +69,7 @@ N_FREQ = len(FREQUENCY_MAPPING)
 
 OUT_DIR = PROJECT_ROOT / "L1_23_results_analysis"
 KEY_TO_TITLES = {"103": "L1-03", "104": "L1-04", "105": "L1-05", "109": "L1-09", "123": "L1-23"}
+FREQ_LABELS_DISPLAY = [rf"$HI_{{{f}}} (-)$" for f in FREQUENCY_MAPPING] + [r"$HI_{avg} (-)$"]  # LaTeX x-tick labels for FREQ_LABELS (display only -- FREQ_LABELS itself stays plain text, it's also used as the xlsx "frequency" column / reindex key)
 
 
 # ─── Path helpers ──────────────────────────────────────────────────────────────
@@ -80,8 +81,9 @@ def _base_panels(p):
     return [x for x in SINGLE_FILE_PANELS if x != p]
 
 
-def _graph_data_dir(p):
-    return _test_run_dir(p) / "graph_data"
+def _graph_data_dir(p, bench_123_from_103=False):
+    # the L1-03-baseline variant gets its own root so its raw AE latents and PyG processed files never mix with the normal ones
+    return _test_run_dir(p) / ("graph_data_bench103" if bench_123_from_103 else "graph_data")
 
 
 def _bo_results_dir(p):
@@ -94,9 +96,10 @@ def _model_out_dir(p, model_type):
     return _test_run_dir(p) / f"graph_performance_results_{model_type}"
 
 
-def _palette_style(i):
+
+def _palette_style(i, is_test):
     color = PALETTE[i % len(PALETTE)]
-    linestyle = _LINESTYLES[(i // len(PALETTE)) % len(_LINESTYLES)]
+    linestyle = '-' if is_test else '--'
     return color, linestyle
 
 
@@ -123,18 +126,19 @@ def _collect_HI_and_path_out(model, dataset, device):
     return HI[order], out_arr[order]
 
 
-def _ensure_panel123_ae_latent(p, freq, fold):
+def _ensure_panel123_ae_latent(p, freq, fold, bench_123_from_103=False):
     '''Ensures panel_123_shi_raw_{freq}_fold{fold}.pt exists under this test-panel
-    model's graph_data/raw/ -- extracted (once) via extract_shi.extract_shi, mirroring
-    extract_shi.pre_compute_AE_output's per-panel loop body, just for dataset="123".'''
-    raw_dir = _graph_data_dir(p) / "raw"
+    model's graph_data/raw/ (graph_data_bench103/raw/ for the L1-03-baseline variant) -- extracted
+    (once) via extract_shi.extract_shi, mirroring extract_shi.pre_compute_AE_output's per-panel
+    loop body, just for dataset="123".'''
+    raw_dir = _graph_data_dir(p, bench_123_from_103) / "raw"
     raw_path = raw_dir / f"panel_123_shi_raw_{freq}_fold{fold}.pt"
     if raw_path.exists():
         return
 
     folders = [f"Multi_path_BO_fixed_freq{freq}\\Bayesian_CNN_AE_path{i}" for i in range(N_PATHS)]
     latents_all, _path_labels, big_latent_all = extract_shi(
-        folders, freq, dataset="123", fold=fold, GAN_dir=str(_test_run_dir(p))
+        folders, freq, dataset="123", fold=fold, GAN_dir=str(_test_run_dir(p)), bench_123_from_103=bench_123_from_103
     )
     out_dict = {"shi": np.array(latents_all), "path_labels": np.array(_path_labels), "big_latent": np.array(big_latent_all)}
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -142,9 +146,22 @@ def _ensure_panel123_ae_latent(p, freq, fold):
     print(f"[peak][{p}] extracted AE latent for panel 123, freq={freq}, fold={fold} -> {raw_path}")
 
 
-def _compute_gcn_panel123(p, model_type, device):
+def _ensure_panel123_raw_features_bench103(p, freq):
+    '''Writes the panel-123 subpanels' raw diff-feature files (signal minus baseline) into this test-panel
+    model's graph_data_bench103/raw/, using panel L1-03's baseline instead of each subpanel's own'''
+    raw_dir = _graph_data_dir(p, bench_123_from_103=True) / "raw"
+    baseline_extractor = FeaturesExtractor(str(mat_file_path("103")))
+    sample_rate = 1 / baseline_extractor.dt()
+    for subpanel in PANEL_123_SUBPANELS:
+        extract_diff_features_with_baseline(FeaturesExtractor(str(mat_file_path(subpanel))), baseline_extractor,
+                                            freq, sample_rate, raw_dir, cache_dir=str(FEATURES_CACHE_DIR))
+
+
+def _compute_gcn_panel123(p, model_type, device, bench_123_from_103=False):
     '''Ensemble (per-CV-fold-averaged) HI curve and per-path output curve for panel 123,
-    for every frequency, for one (test-panel model, "peak"/"raw") combination.'''
+    for every frequency, for one (test-panel model, "peak"/"raw") combination.
+    bench_123_from_103: panel 123's inputs use panel L1-03's baseline ("peak" via its AE latents,
+    "raw" via its diff features).'''
     base_panels_p = _base_panels(p)
     adjacency_type = "peak" if model_type == "raw" else model_type
 
@@ -168,14 +185,16 @@ def _compute_gcn_panel123(p, model_type, device):
         fold_HI, fold_out = [], []
         shared_ds = None
         if model_type == "raw":
-            shared_ds = features_GraphDataset(root=str(_graph_data_dir(p)), panel_number=123, freq=freq, type=adjacency_type)
+            if bench_123_from_103:
+                _ensure_panel123_raw_features_bench103(p, freq)
+            shared_ds = features_GraphDataset(root=str(_graph_data_dir(p, bench_123_from_103)), panel_number=123, freq=freq, type=adjacency_type)
 
         for fold, ck in checkpoints.items():
             if model_type == "raw":
                 ds = shared_ds
             else:
-                _ensure_panel123_ae_latent(p, freq, int(fold))
-                ds = Panel_GraphDataset(root=str(_graph_data_dir(p)), panel_number=123, freq=freq,
+                _ensure_panel123_ae_latent(p, freq, int(fold), bench_123_from_103)
+                ds = Panel_GraphDataset(root=str(_graph_data_dir(p, bench_123_from_103)), panel_number=123, freq=freq,
                                          big_latent=True, type=adjacency_type, fold=int(fold))
             mean, std = ck["feature_mean"], ck["feature_std"]
 
@@ -202,9 +221,10 @@ def _compute_gcn_panel123(p, model_type, device):
 
 
 # ─── Path AE panel-123 evaluation ──────────────────────────────────────────────
-def _compute_ae_panel123(p):
+def _compute_ae_panel123(p, bench_123_from_103=False):
     '''Ensemble sHI curve (mean over the 28 paths) and per-path sHI array for panel 123,
-    for every frequency, for the per-path AE ensemble ("path" type).'''
+    for every frequency, for the per-path AE ensemble ("path" type). bench_123_from_103: use
+    panel L1-03's baseline for panel 123 (see create_datastores.prepare_datastores).'''
     base_panels_p = _base_panels(p)
     held_out = base_panels_p[0]  # any fold's own (ds_dict, norm_stats) pair works -- see path_performance._collect_ensemble_DI's docstring
     train_ds_names = [x for x in base_panels_p if x != held_out]
@@ -222,7 +242,7 @@ def _compute_ae_panel123(p):
             _, _, _, ds_dict, *_rest = prepare_datastores(
                 path_i=path_i, freq_i=freq, base_batch_size=16, test_batch_size=1,
                 train_ds_names=train_ds_names, val_ds_names=[held_out], test_ds_names=[p],
-                include_benchmark=True,
+                include_benchmark=True, bench_123_from_103=bench_123_from_103,
             )
             norm_stats = _rest[-1]
 
@@ -251,21 +271,22 @@ def _compute_ae_panel123(p):
 
 
 # ─── Caching ───────────────────────────────────────────────────────────────────
-def _cache_path(p, model_type):
-    return OUT_DIR / f"_cache_panel123_{model_type}_{p}.pkl"
+def _cache_path(p, model_type, bench_123_from_103=False):
+    suffix = "_bench103" if bench_123_from_103 else ""
+    return OUT_DIR / f"_cache_panel123_{model_type}_{p}{suffix}.pkl"
 
 
-def _load_or_compute_panel123(p, model_type, device, recompute=False):
-    cache_path = _cache_path(p, model_type)
-    if cache_path.exists() and not recompute:
+def _load_or_compute_panel123(p, model_type, device, recompute=False, bench_123_from_103=False):
+    cache_path = _cache_path(p, model_type, bench_123_from_103)
+    if cache_path.exists() and (not recompute or model_type == "path"):  # path type is very slow: never recompute once cached
         with open(cache_path, "rb") as f:
             return pickle.load(f)
 
     print(f"=== Computing panel-123 outputs: type={model_type} test-panel-model={p} ===")
     if model_type == "path":
-        HI_by_freq, path_out_by_freq = _compute_ae_panel123(p)
+        HI_by_freq, path_out_by_freq = _compute_ae_panel123(p, bench_123_from_103=bench_123_from_103)
     else:
-        HI_by_freq, path_out_by_freq = _compute_gcn_panel123(p, model_type, device)
+        HI_by_freq, path_out_by_freq = _compute_gcn_panel123(p, model_type, device, bench_123_from_103=bench_123_from_103)
 
     result = {"HI_by_freq": HI_by_freq, "path_out_by_freq": path_out_by_freq}
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -307,8 +328,7 @@ def compute_WAE_weights(results, model_type, p):
         Tr = trendability_criterion(DI)
         per_freq_metrics.append([Mo + Pr + Tr, Mo, Pr, Tr])
 
-    per_freq_metrics = np.array(per_freq_metrics)
-    print(f"fitness for {model_type} {p}: {per_freq_metrics[:, 0]}")    
+    per_freq_metrics = np.array(per_freq_metrics) 
 
     fitness = per_freq_metrics[:, 0] # every frequency
     weights = fitness / np.sum(fitness)
@@ -319,7 +339,7 @@ def task1_WAE_HI(results):
     test-panel model -- each with one WAE HI line per panel in PANEL_LABELS'''
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     fig, axes = plt.subplots(len(MODEL_TYPES), len(TEST_PANEL_MODELS),
-                              figsize=(7 * len(TEST_PANEL_MODELS), 5 * len(MODEL_TYPES)), squeeze=False)
+                              figsize=(4 * len(TEST_PANEL_MODELS), 3 * len(MODEL_TYPES)), squeeze=False)
     row_to_type = {"path":0,"peak":1,"raw":2}
     for row, model_type in enumerate(MODEL_TYPES):
         row = row_to_type[model_type]
@@ -337,26 +357,33 @@ def task1_WAE_HI(results):
                     continue
                 WAE_HI = np.sum([w * c for w, c in zip(weights, HI_by_freq)], axis=0)
                 life_fraction = np.linspace(0, 1, WAE_HI.shape[0])
-                color, linestyle = _palette_style(i)
-                ax.plot(life_fraction * 100, WAE_HI, color=color, linestyle=linestyle, label=KEY_TO_TITLES.get(panel, panel))
+                test_panel = p == panel or panel == "123"
+                color, linestyle = _palette_style(i, test_panel)
+                # the model's held-out panel gets no legend label, so each panel's legend entry is its dashed line;
+                # L1-23 is always solid, so its solid line is its entry
+                label = KEY_TO_TITLES.get(panel, panel) if (not test_panel or panel == "123") else "_nolegend_"
+                ax.plot(life_fraction * 100, WAE_HI, color=color, linestyle=linestyle,
+                        linewidth=2.5 if test_panel else 1.5, label=label)
                 any_line = True
             if not any_line:
                 ax.text(0.5, 0.5, "no data", ha="center", va="center", transform=ax.transAxes, fontsize=15)
             if row == 0:
-                ax.set_title(KEY_TO_TITLES.get(p, p), fontsize=20)
+                ax.set_title(KEY_TO_TITLES.get(p, p), fontsize=15)
             if col == 0:
-                ax.set_ylabel(f"{TYPES_LABELS.get(model_type, model_type)}\n", fontsize=20)
+                ax.set_ylabel(rf"$HI_{{{TYPES_LABELS.get(model_type, model_type)}}} (-)$" + "\n", fontsize=20)
             if row == len(MODEL_TYPES) - 1:
-                ax.set_xlabel("Lifetime (%)", fontsize=20)
-            ax.tick_params(axis="both", labelsize=16)
+                ax.set_xlabel("Lifetime (%)", fontsize=15)
+            ax.tick_params(axis="both", labelsize=15)
             ax.grid(True)
 
-    legend_handles = [
-        Line2D([0], [0], color=_palette_style(i)[0], linestyle=_palette_style(i)[1], label=KEY_TO_TITLES.get(panel, panel))
-        for i, panel in enumerate(PANEL_LABELS)
-    ]
-    fig.legend(handles=legend_handles, fontsize=20, title_fontsize=20,
-               loc="lower center", bbox_to_anchor=(0.5, -0.02), ncol=len(legend_handles))
+    axes[0, 0].plot([], [], color="gray", linestyle="-", linewidth=2.5, label="Test panel")  # empty line, only for the legend entry
+    handles_by_label = {}
+    for ax in axes.flat:
+        for h, l in zip(*ax.get_legend_handles_labels()):
+            handles_by_label.setdefault(l, h)
+    labels = [l for l in [KEY_TO_TITLES.get(p, p) for p in PANEL_LABELS] + ["Test panel"] if l in handles_by_label]
+    fig.legend([handles_by_label[l] for l in labels], labels, fontsize=15,
+               loc="lower center", bbox_to_anchor=(0.5, -0.02), ncol=len(labels))
 
     fig.tight_layout(rect=[0, 0.06, 1, 1])
     save_path = OUT_DIR / "WAE_HI_L123.svg"
@@ -457,18 +484,18 @@ def task2_test_metrics(results):
                 sub = sub_type[sub_type["test_panel_model"] == label].set_index("frequency").reindex(FREQ_LABELS)
                 if sub[metric_name].isna().all():
                     continue
-                color, linestyle = _palette_style(i)
+                color, linestyle = _palette_style(i, is_test=True)  # one solid line per test-panel model
                 ax.plot(x, sub[metric_name].values, marker="o", linestyle=linestyle, color=color, label=label)
                 any_line = True
             if not any_line:
                 plt.close(fig)
                 continue
             ax.set_xticks(x)
-            ax.set_xticklabels(FREQ_LABELS, rotation=45, ha="right")
+            ax.set_xticklabels(FREQ_LABELS_DISPLAY, rotation=45, ha="right")
             ax.set_xlabel("Frequency")
             ax.set_ylabel(metric_name)
             ax.set_title(f"L1-23 test metric: {metric_name} ({TYPES_LABELS.get(model_type, model_type)})")
-            ax.legend(title="Test-panel model", fontsize=8)
+            ax.legend(title="Test-panel model", fontsize=15)
             ax.grid(True)
             fig.tight_layout()
             save_path = OUT_DIR / f"L123_test_metric_{metric_name}_{model_type}.svg"
@@ -505,57 +532,12 @@ def _average_maps_over_freq(maps_by_freq):
 
 def _plot_damage_map_grid_L123(grid_maps, model_type, normalize=False):
     '''grid_maps: {test_panel_model: {life_fraction: map}}. One figure: rows = test-panel
-    model, columns = life fraction. normalize=True rescales each row into [0, 1]
-    via performance_accross_tests._normalize_maps, then the whole grid shares one color scale and one
-    colorbar below the figure; normalize=False leaves each cell on its own raw scale, so
-    each cell autoscales and gets its own colorbar instead'''
-    panels_present = [p for p in TEST_PANEL_MODELS if p in grid_maps]
-    n_rows, n_cols = len(panels_present), len(LIFETIME_FRACTIONS)
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(4 * n_cols, 4 * n_rows), squeeze=False)
-
-    if normalize:
-        grid_maps = {p: _normalize_maps(grid_maps[p]) for p in panels_present}
-    vmin, vmax = (0.0, 1.0) if normalize else (None, None)
-
-    im = None
-    for row, p in enumerate(panels_present):
-        for col, frac in enumerate(LIFETIME_FRACTIONS):
-            ax = axes[row][col]
-            m = grid_maps[p][frac]
-            _draw_static_panel(ax, 123)
-            im = ax.imshow(m.T, extent=(0, PANEL_W, 0, PANEL_H), origin="lower", cmap=CMAP_HEATMAP, vmin=vmin, vmax=vmax)
-            if not normalize:
-                cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-                cbar.ax.set_title(r"$\Psi (-)$", fontsize=20, loc="left", pad=12)
-                cbar.set_ticks(np.round(np.linspace(*im.get_clim(), 4)).astype(int))
-                cbar.ax.tick_params(labelsize=20)
-                cbar.ax.tick_params(labelsize=20)
-            if row == 0:
-                ax.set_title(f"{frac:.0%} lifetime", fontsize=20)
-            if col == 0:
-                ax.set_ylabel(KEY_TO_TITLES.get(p, p), fontsize=20)
-            ax.set_xticks([])
-            ax.set_yticks([])
-
-    fig.suptitle(f"L1-23 WCPDI vs lifetime, avg over frequency ({TYPES_LABELS.get(model_type, model_type)})")
-    if normalize:
-        fig.tight_layout(rect=[0, 0.06, 1, 1])
-        if im is not None:
-            cax = fig.add_axes([0.15, 0.02, 0.7, 0.02])
-            cbar = fig.colorbar(im, cax=cax, orientation="horizontal")
-            cbar.ax.set_title(r"$\Psi (-)$", fontsize=20, loc="left", pad=12)
-            cbar.set_ticks(np.round(np.linspace(*im.get_clim(), 4)).astype(int))
-            cbar.ax.tick_params(labelsize=20)
-    else:
-        fig.tight_layout()
-
-    if normalize:
-        save_path = OUT_DIR / f"damage_map_grid_L123_{model_type}.svg"
-    else:
-        save_path = OUT_DIR / f"damage_map_grid_L123_{model_type}_not_normalized.svg"
-    fig.savefig(save_path)
-    plt.close(fig)
-    print(f"Saved: {save_path}")
+    model, columns = life fraction, drawn with performance_accross_tests._plot_damage_map_grid:
+    normalize=True keeps the first and last frames on their own scale and gives the middle frames
+    of each row one shared scale with a horizontal colorbar; normalize=False gives every cell its own scale and colorbar'''
+    rows = [(KEY_TO_TITLES.get(p, p), 123, grid_maps[p]) for p in TEST_PANEL_MODELS if p in grid_maps]
+    suffix = "" if normalize else "_not_normalized"
+    _plot_damage_map_grid(rows, OUT_DIR / f"damage_map_grid_L123_{model_type}{suffix}.svg", LIFETIME_FRACTIONS, normalize)
 
 
 def task3_damage_maps(results, normalize=True):
@@ -609,60 +591,28 @@ def task4_avg_damage_map_grid(all_grid_maps, normalize=True):
         print("[task4] no damage-map data for any type, skipping")
         return
 
-    n_rows, n_cols = len(types_present), len(LIFETIME_FRACTIONS)
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(4 * n_cols, 4 * n_rows), squeeze=False)
-
-    vmin, vmax = (0.0, 1.0) if normalize else (None, None)
-
-    im = None
-    for row, model_type in enumerate(types_present):
-        avg_maps = _average_maps_over_test_panels(all_grid_maps[model_type])
-        if normalize:
-            avg_maps = _normalize_maps(avg_maps)  # same normalization as task3_damage_maps's normalize=True branch
-        for col, frac in enumerate(LIFETIME_FRACTIONS):
-            ax = axes[row][col]
-            m = avg_maps[frac]
-            _draw_static_panel(ax, 123)
-            im = ax.imshow(m.T, extent=(0, PANEL_W, 0, PANEL_H), origin="lower", cmap=CMAP_HEATMAP, vmin=vmin, vmax=vmax)
-            if not normalize:
-                cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-                cbar.ax.tick_params(labelsize=20)
-            if row == 0:
-                ax.set_title(f"{frac:.0%} lifetime", fontsize=20)
-            if col == 0:
-                ax.set_ylabel(TYPES_LABELS.get(model_type, model_type), fontsize=20)
-            ax.set_xticks([])
-            ax.set_yticks([])
-
-    if normalize:
-        fig.tight_layout(rect=[0, 0.06, 1, 1])
-        if im is not None:
-            cax = fig.add_axes([0.15, 0.02, 0.7, 0.02])
-            cbar = fig.colorbar(im, cax=cax, orientation="horizontal", label="Normalized WCPDI")
-            cbar.ax.tick_params(labelsize=20)
-        save_path = OUT_DIR / "damage_map_grid_L123_avg_over_test_panels.svg"
-    else:
-        fig.tight_layout()
-        save_path = OUT_DIR / "damage_map_grid_L123_avg_over_test_panels_not_normalized.svg"
-    fig.savefig(save_path)
-    plt.close(fig)
-    print(f"Saved: {save_path}")
+    rows = [(TYPES_LABELS.get(model_type, model_type), 123, _average_maps_over_test_panels(all_grid_maps[model_type]))
+            for model_type in types_present]
+    suffix = "" if normalize else "_not_normalized"
+    _plot_damage_map_grid(rows, OUT_DIR / f"damage_map_grid_L123_avg_over_test_panels{suffix}.svg", LIFETIME_FRACTIONS, normalize)
 
 
 # ─── Main ────────────────────────────────────────────────────────────────────
-def main(recompute=False, model_types=["raw", "path", "peak"], test_panels=TEST_PANEL_MODELS):
+def main(recompute=False, model_types=["raw", "path", "peak"], test_panels=TEST_PANEL_MODELS, bench_123_from_103=False):
+    '''bench_123_from_103: evaluate every model type on panel 123 using panel L1-03's baseline'''
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     results = {model_type: {} for model_type in model_types}
     for model_type in model_types:
         for p in test_panels:
-            results[model_type][p] = _load_or_compute_panel123(p, model_type, device, recompute=recompute)
+            results[model_type][p] = _load_or_compute_panel123(p, model_type, device, recompute=recompute,
+                                                               bench_123_from_103=bench_123_from_103)
 
     task1_WAE_HI(results)
     task2_test_metrics(results)
-    all_grid_maps = task3_damage_maps(results,normalize=False)
-    task4_avg_damage_map_grid(all_grid_maps, normalize=False)
+    all_grid_maps = task3_damage_maps(results, normalize=True)
+    task4_avg_damage_map_grid(all_grid_maps, normalize=True)
 
 
 if __name__ == "__main__":
-    main(recompute="--recompute" in sys.argv)
+    main(recompute="--recompute" in sys.argv, bench_123_from_103="--bench-103" in sys.argv)
