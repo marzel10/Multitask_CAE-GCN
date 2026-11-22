@@ -71,8 +71,8 @@ def main(panel=PANEL, state_idx=STATE_IDX, freq_idx=FREQ_IDX, path_idx=PATH_IDX,
           f"states.signal_envelope_peak_area: {area_reported:.6g}")
 
     fig, ax = plt.subplots(figsize=(10, 10))
-    ax.plot(time[100:len(time)//2-1000], scattered[100:len(time)//2-1000], color="lightgray", linewidth=4, label="Scattered signal")
-    ax.plot(time[100:len(time)//2-1000], envelope[100:len(time)//2-1000], color="C0", linewidth=5, label="Envelope")
+    ax.plot(time[100:len(time)], scattered[100:len(time)], color="lightgray", linewidth=4, label="Scattered signal")
+    ax.plot(time[100:len(time)], envelope[100:len(time)], color="C0", linewidth=5, label="Envelope")
     ax.fill_between(time[i_start:i_end + 1], envelope[i_start:i_end + 1], color="C0", alpha=1.0, zorder=3)
     ax.plot(time[peak_idx], envelope[peak_idx], "o", color="orange", markersize=20, zorder=5, label="Envelope peak")
 
