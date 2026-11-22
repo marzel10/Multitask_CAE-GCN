@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 from imagining_alghoritm import P_AE, U, WCPDI
 from path_performance import load_cached, average_sHI_over_frequency, OUT_DIR, PANELS
 from plot_panel import _draw_static_panel
-from config import DEFAULT_N_PIXELS, CMAP_HEATMAP, PANEL_H, PANEL_W, TEST_PANEL, PANELS
+from config import DEFAULT_N_PIXELS, CMAP_HEATMAP, PANEL_H, PANEL_W, TEST_PANEL, PANELS, AE_RESULTS_DIR
 
 
 def _load_sHI_avg(panel_number, fold, sHI=None):
@@ -153,4 +153,4 @@ if __name__ == "__main__":
     plt.ylabel('Y Position')
     plt.tight_layout()
     #plt.show()
-    plot_damage_map_grid(panel_numbers=[int(p) for p in PANELS], fractions=(0.0, 0.25, 0.5, 0.75, 1.0),  n_pixels=DEFAULT_N_PIXELS, sHI=sHI, save_path=f"WCPDI_AE_damage_maps_grid.svg")
+    plot_damage_map_grid(panel_numbers=[int(p) for p in PANELS], fractions=(0.0, 0.25, 0.5, 0.75, 1.0),  n_pixels=DEFAULT_N_PIXELS, sHI=sHI, save_path=str(AE_RESULTS_DIR / "WCPDI_AE_damage_maps_grid.svg"))

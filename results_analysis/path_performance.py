@@ -382,8 +382,7 @@ def main(out_dir, recompute=True):
 
 
 if __name__ == "__main__":
-    remaining_path_per = ["105_wo123"]
-    for panel in remaining_path_per:
-        out_dir = PROJECT_ROOT / f"test_{panel}" /"path_performance_results"
-        main(out_dir)
-    #main(recompute="--recompute" in sys.argv)
+    # Reads models from and writes results to the current TEST_PANEL's folder.
+    # To run for another panel: set SHM_TEST_PANEL first, e.g. in PowerShell
+    #   $env:SHM_TEST_PANEL = "105"; python results_analysis/path_performance.py
+    main(AE_RESULTS_DIR)

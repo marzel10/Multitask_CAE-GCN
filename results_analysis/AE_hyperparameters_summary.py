@@ -32,8 +32,8 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 import pandas as pd
 
-from config import PROJECT_ROOT, CNN_FIXED_LATENT_DIM, CUSTOM_PALETTE, PANEL_LABELS
-TEST_PANELS = ["103", "104", "105", "109"]  # each has its own test_{panel}_wo123 run (that panel held out as TEST_PANEL)
+from config import PROJECT_ROOT, CNN_FIXED_LATENT_DIM, CUSTOM_PALETTE, PANEL_LABELS, test_run_dir
+TEST_PANELS = ["103", "104", "105", "109"]  # each has its own test_{panel} run (that panel held out as TEST_PANEL)
 FREQS = range(0, 6)
 OUT_DIR = PROJECT_ROOT / "AE_hyperparameters_summary_results"
 
@@ -66,7 +66,7 @@ def load_best_params(panels=TEST_PANELS, freqs=FREQS):
     DataFrame, tagging each row with its panel and frequency_index.'''
     rows = []
     for panel in panels:
-        root = PROJECT_ROOT / f"test_{panel}_wo123"
+        root = test_run_dir(panel)
         for freq in freqs:
             json_path = (root / f"Multi_path_BO_fixed_freq{freq}"
                          / f"Bayesian_CNN_AE_test{[panel]}_freq{freq}_best_params.json")

@@ -1,8 +1,8 @@
 '''
 Summarizes the pre-processed-features GCN's Bayesian-optimized hyperparameters across
 every test panel, read from
-TEST_RUN_DIR/"results"/f"best_hyperparameters_freq{freq}{beta_suffix}_pre_processed.json"
-across all 4 test_{panel}_wo123 runs (BO_GCN.py's run_bayesian_optimization, raw_features=False,
+test_run_dir(panel)/"results"/f"best_hyperparameters_freq{freq}{beta_suffix}_pre_processed.json"
+across all 4 test_{panel} runs (BO_GCN.py's run_bayesian_optimization, raw_features=False,
 type="peak").
 
 Plots, one per hyperparameter, frequency index on the x-axis, one colored series per test
@@ -31,7 +31,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 import pandas as pd
 
-from config import PROJECT_ROOT, CUSTOM_PALETTE, PANEL_LABELS
+from config import PROJECT_ROOT, CUSTOM_PALETTE, PANEL_LABELS, test_run_dir
 
 TEST_PANELS = ["103", "104", "105", "109"]
 FREQS = range(0, 6)
@@ -59,7 +59,7 @@ HP_PLOTS = [
 def load_best_params(panels=TEST_PANELS, freqs=FREQS, beta_suffix=BETA_SUFFIX, raw=False):
     rows = []
     for panel in panels:
-        root = PROJECT_ROOT / f"test_{panel}_wo123"
+        root = test_run_dir(panel)
         for freq in freqs:
             if raw:
                 json_path = root / "results" / f"best_hyperparameters_freq{freq}{beta_suffix}.json"

@@ -2,8 +2,8 @@
 This file evaluates performance of the CAE and GCN on the unseen new damage type, that
 is the data from panel 123 (L1-23) 
 
-For each of the 4 leave-one-out "test-panel models" (test_103_wo123, test_104_wo123,
-test_105_wo123, test_109_wo123) and each of the 3 published model types -- "peak"
+For each of the 4 leave-one-out "test-panel models" (test_103, test_104,
+test_105, test_109 -- see config.test_run_dir) and each of the 3 published model types -- "peak"
 (CAE-GCN), "raw" (GCN), "path" (CAE) -- this
 (re)builds whatever panel-123 input each model type needs and runs that test-panel
 model's already-trained ensemble on it:
@@ -58,7 +58,7 @@ from imagining_alghoritm import P_AE, U, WCPDI
 from plot_panel import _draw_static_panel
 from prognostic_criteria import monotonicity_criterion, trendability_criterion, prognosability_criterion
 from config import (
-    PROJECT_ROOT, SINGLE_FILE_PANELS, FREQUENCY_MAPPING, PANEL_123_SUBPANELS, FEATURES_CACHE_DIR, mat_file_path, FREQ_LABELS, METRIC_NAMES, TYPES_LABELS,
+    PROJECT_ROOT, test_run_dir, SINGLE_FILE_PANELS, FREQUENCY_MAPPING, PANEL_123_SUBPANELS, FEATURES_CACHE_DIR, mat_file_path, FREQ_LABELS, METRIC_NAMES, TYPES_LABELS,
     LIFETIME_FRACTIONS, DAMAGE_MAP_N_PIXELS, PANEL_W, PANEL_H, CMAP_HEATMAP,
     CUSTOM_PALETTE as PALETTE, _LINESTYLES, SINGLE_FILE_PANELS as TEST_PANEL_MODELS
 )
@@ -71,36 +71,29 @@ OUT_DIR = PROJECT_ROOT / "L1_23_results_analysis"
 KEY_TO_TITLES = {"103": "L1-03", "104": "L1-04", "105": "L1-05", "109": "L1-09", "123": "L1-23"}
 FREQ_LABELS_DISPLAY = [rf"$HI_{{{f}}} (-)$" for f in FREQUENCY_MAPPING] + [r"$HI_{avg} (-)$"]  # LaTeX x-tick labels for FREQ_LABELS (display only -- FREQ_LABELS itself stays plain text, it's also used as the xlsx "frequency" column / reindex key)
 
+def _palette_style(i, is_test):
+    color = PALETTE[i % len(PALETTE)]
+    linestyle = '-' if is_test else '--'
+    return color, linestyle
 
 # ─── Path helpers ──────────────────────────────────────────────────────────────
-def _test_run_dir(p):
-    return PROJECT_ROOT / f"test_{p}_wo123"
-
-
 def _base_panels(p):
     return [x for x in SINGLE_FILE_PANELS if x != p]
 
 
 def _graph_data_dir(p, bench_123_from_103=False):
     # the L1-03-baseline variant gets its own root so its raw AE latents and PyG processed files never mix with the normal ones
-    return _test_run_dir(p) / ("graph_data_bench103" if bench_123_from_103 else "graph_data")
+    return test_run_dir(p) / ("graph_data_bench103" if bench_123_from_103 else "graph_data")
 
 
 def _bo_results_dir(p):
-    return _test_run_dir(p) / "results"
+    return test_run_dir(p) / "results"
 
 
 def _model_out_dir(p, model_type):
     if model_type == "path":
-        return _test_run_dir(p) / "path_performance_results"
-    return _test_run_dir(p) / f"graph_performance_results_{model_type}"
-
-
-
-def _palette_style(i, is_test):
-    color = PALETTE[i % len(PALETTE)]
-    linestyle = '-' if is_test else '--'
-    return color, linestyle
+        return test_run_dir(p) / "path_performance_results"
+    return test_run_dir(p) / f"graph_performance_results_{model_type}"
 
 
 # ─── GCN (peak / raw) panel-123 evaluation ─────────────────────────────────────
@@ -138,7 +131,7 @@ def _ensure_panel123_ae_latent(p, freq, fold, bench_123_from_103=False):
 
     folders = [f"Multi_path_BO_fixed_freq{freq}\\Bayesian_CNN_AE_path{i}" for i in range(N_PATHS)]
     latents_all, _path_labels, big_latent_all = extract_shi(
-        folders, freq, dataset="123", fold=fold, GAN_dir=str(_test_run_dir(p)), bench_123_from_103=bench_123_from_103
+        folders, freq, dataset="123", fold=fold, GAN_dir=str(test_run_dir(p)), bench_123_from_103=bench_123_from_103
     )
     out_dict = {"shi": np.array(latents_all), "path_labels": np.array(_path_labels), "big_latent": np.array(big_latent_all)}
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -233,7 +226,7 @@ def _compute_ae_panel123(p, bench_123_from_103=False):
     for freq in range(N_FREQ):
         per_path = [None] * N_PATHS
         for path_i in range(N_PATHS):
-            path_dir = _test_run_dir(p) / f"Multi_path_BO_fixed_freq{freq}" / f"Bayesian_CNN_AE_path{path_i}"
+            path_dir = test_run_dir(p) / f"Multi_path_BO_fixed_freq{freq}" / f"Bayesian_CNN_AE_path{path_i}"
             ensemble_path = path_dir / "ensemble_model.keras"
             if not ensemble_path.exists():
                 print(f"[path][{p}] freq={freq} path={path_i}: ensemble_model.keras missing, skipping")

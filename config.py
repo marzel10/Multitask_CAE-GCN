@@ -13,8 +13,11 @@ import numpy as np
 # ===========================================================================
 PROJECT_ROOT = Path(__file__).resolve().parent  # .../GAN/
 
+def test_run_dir(panel: str) -> Path:
+    return PROJECT_ROOT / f"test_{panel}"
+
 TEST_PANEL = [os.environ.get("SHM_TEST_PANEL", "103")]  # <-- change the default here, or set the SHM_TEST_PANEL env var, to make a different panel the held-out test panel
-TEST_RUN_DIR = PROJECT_ROOT / f"test_{TEST_PANEL[0]}_wo123"  # every result that depends on which panel is TEST_PANEL lives under here, so different TEST_PANEL runs never collide
+TEST_RUN_DIR = test_run_dir(TEST_PANEL[0])  # every result that depends on which panel is TEST_PANEL lives under here, so different TEST_PANEL runs never collide
 DEBUG_MODE = False
 
 # Data directories -- shared/reusable across every TEST_PANEL run, not nested under TEST_RUN_DIR

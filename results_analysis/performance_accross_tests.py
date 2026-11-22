@@ -27,7 +27,7 @@ from matplotlib.ticker import FuncFormatter
 from imagining_alghoritm import P_AE, U, WCPDI
 from plot_panel import _draw_static_panel
 from config import (
-    PROJECT_ROOT, FREQUENCY_MAPPING, METRIC_COLUMNS, MODEL_TYPES, GCN_TYPES,
+    PROJECT_ROOT, test_run_dir, FREQUENCY_MAPPING, METRIC_COLUMNS, MODEL_TYPES, GCN_TYPES,
     TYPES_LABELS, PANEL_W, PANEL_H, CMAP_HEATMAP, LIFETIME_FRACTIONS, DAMAGE_MAP_N_PIXELS,
     BETA_CONSTANT, CUSTOM_PALETTE as PALETTE, _LINESTYLES, SINGLE_FILE_PANELS as BASE_PANELS_SET
 )
@@ -67,7 +67,7 @@ def _ensemble_fold_idx(test_panel):
     return len(_base_panels_for(test_panel))  
 
 def _model_dir(test_panel, model_type):
-    root = PROJECT_ROOT / f"test_{test_panel}_wo123"
+    root = test_run_dir(test_panel)
     if model_type == "path":
         return root / "path_performance_results"
     return root / f"graph_performance_results_{model_type}"

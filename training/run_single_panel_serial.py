@@ -31,6 +31,7 @@ from Compute_WAE import main as WAE_main
 from Fitness_summary import main as metrics_summary_main
 from extract_shi import pre_compute_AE_output
 
+
 if __name__ == "__main__":
 
     #Optimize and train AE for every path and frequency (BO is runned only for the first path in each frequency)
@@ -38,8 +39,7 @@ if __name__ == "__main__":
     BO_AE_main()
 
     #Evaluate performance of AEs
-    out_dir = _PROJECT_ROOT / f"test_{sys.argv[1]}_wo123" /"path_performance_results"
-    pp_main(out_dir)
+    pp_main()
 
     # compute and cache the AE output
     print("=== Pre-computing AE output for all panels ===")
