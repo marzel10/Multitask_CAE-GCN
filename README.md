@@ -62,52 +62,49 @@ from the project root:
     python -m results_analysis.performance_accross_tests       # summary across test panels
     python -m results_analysis.L1_23_performance_evaluation    # evaluation on unseen L1-23 damage
 
-The folders are Python packages, so every script inside them is run as a module from the project root:
-`python -m <folder>.<file>` (no `.py`), e.g. `python -m training.BO_AE`. Running a file by its path
-(`python training/BO_AE.py`) fails with `ModuleNotFoundError`, because Python then doesn't see the project root.
+
 To run a script for a test panel other than the default, set the environment variable first, e.g. in PowerShell:
 `$env:SHM_TEST_PANEL = "105"; python -m results_analysis.path_performance`.
 
 ## Source folders
 
 ### `train_and_eval_helpers/`
-Core, reusable SHM building blocks: sensor-network graph construction, the WCPDI
-damage-imaging algorithm, sHI extraction from trained autoencoders, prognostic-criteria
+Core building blocks: sensor-network graph construction, the WCPDI
+damage-imaging algorithm, prognostic-criteria
 metrics, and the shared panel-drawing primitive other plots build on.
 
 - `weight_matrix.py` — Builds path-to-path attention/adjacency matrices (by crossing angle, area overlap, or raw signal features) used as GCN graph edges, and detects failed sensors per panel state.
 - `imagining_alghoritm.py` — Implements the WCPDI probability-based damage-imaging algorithm (`P`, `U`, `WCPDI` functions) that turns per-path sHI values into a 2D damage probability map on the panel.
-- `prognostic_criteria.py` — Defines the monotonicity, trendability, and prognosability criterion functions used to score health-index quality.
+- `prognostic_criteria.py` — Defines the monotonicity, trendability, and prognosability criterion functions.
 - `plot_panel.py` — Defines `plot_panel_with_paths`/`_draw_static_panel` to draw the PZT panel with sensors, damage point, and optionally active sensor paths; the shared backdrop other plotting scripts draw on top of.
 
 ### `data_processing/`
 Loads raw `.mat` sensor signal data (`States_<panel>.mat`) and turns it into the
-TensorFlow/PyTorch-Geometric datasets (feature vectors and path-graphs) consumed by the
+TensorFlow/PyTorch-Geometric datasets (feature vectors and path-graphs) fed to the
 AE and GCN models.
 
 - `states.py` — Defines the `states` class that loads panel `.mat` files and exposes amplitude, benchmark amplitude, time, and energy accessors plus plotting/summary helpers.
 - `features_extractor.py` — Extracts 19 time-domain + 14 frequency-domain features per signal half (66 features/state) from panel states, as input for the feature-based autoencoder.
 - `create_datastores.py` — Builds TensorFlow train/val/test datasets  from the features data for autoencoder training.
-- `extract_shi.py` — Extracts sHI (health-index) values and latent reconstructions from trained autoencoder models for a given panel/frequency and writes them out for use in the graph dataset.
-- `graph_dataset.py` — Defines `Panel_GraphDataset`, a PyTorch-Geometric `InMemoryDataset` that turns per-path sHI/latent values and attention-based adjacency into per-state graphs for the GCN.
+- `extract_shi.py` — Extracts sHI values and latent reconstructions from trained autoencoder models for a given panel/frequency and writes them out for use in the graph dataset.
+- `graph_dataset.py` — Defines `Panel_GraphDataset`, a PyTorch-Geometric `InMemoryDataset` that turns per-path sHI/latent values and adjacency matrix into per-state graphs for the GCN.
 
 ### `models/`
-Defines the two neural-network architectures used in the pipeline: a sparse
-fully-connected/CNN autoencoder for per-path health indices, and a graph convolutional
-network over the sensor-path graph.
+Defines the two neural-network architectures used in the pipeline: CNN autoencoder for per-path health indices, and a graph convolutional
+network 
 
-- `CNN_AE.py` — Defines custom Keras layers (`KSparse`, `ExpandLastDim`, `SqueezeLastDim`) and builders for the fully-connected and CNN sparse autoencoder architectures.
+- `CNN_AE.py` — Defines custom Keras layers (`KSparse`, `ExpandLastDim`, `SqueezeLastDim`) and builders for the CNN sparse autoencoder architecture.
 - `GCN.py` — Defines `DeepGraphCNN`, a residual multi-layer `GCNConv`-based graph neural network that maps a path graph to a scalar health index.
 
 ### `training/`
-Training loops and Bayesian hyperparameter-optimization drivers for both the
+Training loops and Bayesian hyperparameter optimization drivers for both the
 autoencoder and GCN models, plus cross-validation and sensitivity-study helpers.
 
 - `ae_cross_validation_helper.py` — Provides plotting, ensembling, and Keras-compatibility helper layers/functions (`ClipLayer`, `_predict_dataset`, ensemble builders) shared by `BO_AE.py` and `AE_train.py`'s cross-validation loop.
 - `AE_train.py` — Defines the leave-one-out cross-validation training process for the fc_AE/CNN_AE autoencoders across panels 103/104/105/109.
-- `BO_AE.py` — Runs Bayesian hyperparameter optimization for the fc_AE and CNN_AE autoencoders trained on time-frequency features, optionally comparing both architectures side by side.
+- `BO_AE.py` — Runs Bayesian hyperparameter optimization for the CNN_AE autoencoders trained on time-frequency features.
 - `BO_GCN.py` — Runs Bayesian hyperparameter optimization for `DeepGraphCNN` via leave-one-out cross-validation, then retrains and saves an ensemble model with diagnostic plots.
-- `GCN_train.py` — Defines the GCN training loop, including the monotonicity loss, model/dataset setup, and a `plot_HI` visualization of learned health index vs. state.
+- `GCN_train.py` — Defines the GCN training loop, including the monotonicity loss, model/dataset setup.
 - `sensitivity_study.py` — Sweeps `BO_GCN.py`'s Bayesian optimization across frequencies for the CAE-GCN (`run_pre_processed_sweep`), raw-feature GCN (`run_raw_sweep`) and the other adjacency/loss GCN types (`run_types_sweep`), each followed by `graph_performance.py` on the results.
 - `run_single_panel_serial.py` — Worker that runs the full per-panel pipeline (AE, CAE-GCN, GCN, metrics) for one test panel given on the command line; launched once per panel by `run_cross_test.py`.
 
