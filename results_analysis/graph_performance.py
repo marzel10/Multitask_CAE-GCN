@@ -10,24 +10,16 @@ import pickle
 import sys
 from pathlib import Path
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
-
 import numpy as np
 import pandas as pd
 import torch
 import torch_geometric
 import matplotlib.pyplot as plt
 
-from graph_dataset import Panel_GraphDataset, features_GraphDataset
-from imagining_alghoritm import P, U, WCPDI
-from plot_panel import _draw_static_panel
-from prognostic_criteria import monotonicity_criterion, trendability_criterion, prognosability_criterion
+from data_processing.graph_dataset import Panel_GraphDataset, features_GraphDataset
+from train_and_eval_helpers.imagining_alghoritm import P, U, WCPDI
+from train_and_eval_helpers.plot_panel import _draw_static_panel
+from train_and_eval_helpers.prognostic_criteria import monotonicity_criterion, trendability_criterion, prognosability_criterion
 from config import (
     GRAPH_DATA_DIR, BO_SEARCH_RESULTS_DIR, BASE_PANELS, FREQUENCY_MAPPING,
      CMAP_HEATMAP, PANEL_W, PANEL_H, FOLD_KEYS, _LINESTYLES, CUSTOM_PALETTE as PALETTE, GCN_RESULTS_DIR, DAMAGE_MAP_N_PIXELS, METRIC_NAMES, TEST_PANEL, LIFETIME_FRACTIONS

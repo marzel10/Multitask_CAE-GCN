@@ -6,28 +6,19 @@ This file defines the training loop for the GCN model. It includes:
 
 '''
 
-import sys
 from pathlib import Path
-
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 import datetime
 import os
 import pickle
 
-from GCN import DeepGraphCNN
-from graph_dataset import features_GraphDataset
+from models.GCN import DeepGraphCNN
+from data_processing.graph_dataset import features_GraphDataset
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import torch_geometric
-from imagining_alghoritm import optimal_beta, MAX_DIST, U as _wcpdi_U
+from train_and_eval_helpers.imagining_alghoritm import optimal_beta, MAX_DIST, U as _wcpdi_U
 from config import (
     BETA_CONSTANT, DEFAULT_BATCH_SIZE, EPOCHS_PER_FOLD_GCN, GCN_MODELS_DIR, GRAPH_DATA_DIR, CROSS_VALIDATION_RESULTS_DIR,
     DEFAULT_FREQ_INDEX,

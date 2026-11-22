@@ -8,17 +8,8 @@ This file:
 If you do any changes in the process method, make sure to delete the processed files to trigger re-processing with the new code.
 '''
 
-import sys
 import time
 from pathlib import Path
-
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 
 import warnings
@@ -27,9 +18,9 @@ warnings.formatwarning = lambda msg, *_, **__: f"Warning: {msg}\n"
 
 from torch_geometric.data import Data, InMemoryDataset
 import torch
-from weight_matrix import find_crossings, adjencency_matrix, find_crossings_by_area
+from train_and_eval_helpers.weight_matrix import find_crossings, adjencency_matrix, find_crossings_by_area
 import numpy as np
-from create_datastores import states
+from data_processing.create_datastores import states
 from config import BETA_CONSTANT, NR_SAVED_STATES, STATE_START_INDICES, mat_file_path,  PANEL_123_SUBPANELS
 
 class Panel_GraphDataset(InMemoryDataset):

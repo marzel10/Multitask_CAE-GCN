@@ -46,9 +46,7 @@ import gc
 import json
 import multiprocessing
 import os
-import sys
 from functools import partial
-from pathlib import Path
 import psutil, os
 
 # for checking memory usage during optimization
@@ -56,30 +54,22 @@ def log_mem(tag=""):
     rss = psutil.Process(os.getpid()).memory_info().rss
     print(f"[MEM {tag}] {rss / 1e9:.2f} GB")
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
-
 import keras_tuner as kt
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 
-from AE_train import model_train_features, monotonicity_loss
-from CNN_AE import (
+from training.AE_train import model_train_features, monotonicity_loss
+from models.CNN_AE import (
     build_CNN_AE_features,
     build_fc_AE_features,
 )
-from ae_cross_validation_helper import (
+from training.ae_cross_validation_helper import (
     plot_sHI_cv_fold, plot_reconstruction_cv_fold, build_ensemble_ae, plot_ensemble_sHI,
 )
-from create_datastores import prepare_datastores
-from prognostic_criteria import monotonicity_criterion, trendability_criterion, prognosability_criterion
+from data_processing.create_datastores import prepare_datastores
+from train_and_eval_helpers.prognostic_criteria import monotonicity_criterion, trendability_criterion, prognosability_criterion
 from config import (
     K_SPARSE_PENALTY_WEIGHT, CV_PANELS, VAL_PANELS,
     BO_RESULTS_DIR, BO_TUNER_DIR, BO_SEARCH_RESULTS_DIR, TEST_RUN_DIR,

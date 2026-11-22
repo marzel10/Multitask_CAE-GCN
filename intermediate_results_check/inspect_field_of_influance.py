@@ -4,23 +4,14 @@ imagining_alghoritm.U's own R/beta weighting: a path's weight W is > 0 exactly
 inside the ellipse with foci at its two sensors (R = (d1+d2)/d - 1 < beta defines it,
 see U / optimal_beta in imagining_alghoritm.py) -- so the W > 0 boundary IS that ellipse.
 '''
-import sys
 from pathlib import Path
-
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
-from imagining_alghoritm import U
-from plot_panel import _draw_static_panel
+from train_and_eval_helpers.imagining_alghoritm import U
+from train_and_eval_helpers.plot_panel import _draw_static_panel
 from config import DEFAULT_N_PIXELS, PANEL_W, PANEL_H, SENSOR_POSITIONS, SENSOR_PAIRS, CUSTOM_PALETTE
 
 

@@ -1,24 +1,15 @@
 '''
 Loads a saved cross-validation ensemble model and plots its sHI predictions for one panel.
 '''
-import sys
 from pathlib import Path
-
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 import tensorflow as tf
 
-from ae_cross_validation_helper import ClipLayer, plot_ensemble_sHI
-from CNN_AE import KSparse, ExpandLastDim, SqueezeLastDim
-from create_datastores import prepare_datastores
+from training.ae_cross_validation_helper import ClipLayer, plot_ensemble_sHI
+from models.CNN_AE import KSparse, ExpandLastDim, SqueezeLastDim
+from data_processing.create_datastores import prepare_datastores
 from config import DEFAULT_FREQ_INDEX, ALL_BASE_PANELS, CROSS_VALIDATION_RESULTS_AE_DIR
-from AE_train import monotonicity_loss
+from training.AE_train import monotonicity_loss
 
 path_i = 0
 freq_i = DEFAULT_FREQ_INDEX

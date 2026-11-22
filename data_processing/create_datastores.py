@@ -6,20 +6,10 @@ This file:
 
 '''
 from ast import If
-import sys
-from pathlib import Path
 import warnings
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
-
-from states import states
-from features_extractor import FeaturesExtractor
+from data_processing.states import states
+from data_processing.features_extractor import FeaturesExtractor
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt

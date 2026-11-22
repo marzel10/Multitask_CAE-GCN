@@ -27,19 +27,9 @@ EnsembleGCN from those folds, and reproduces the same diagnostic plots as
 BO_features.py (progress, running best, overfitting, HP sensitivity, HP coverage) plus
 GCN_train.py's own training-history / HI plots per fold and for the ensemble.
 """
-import sys
 from functools import partial
-from pathlib import Path
 from types import SimpleNamespace
 import json
-
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 import os
 
@@ -50,13 +40,13 @@ import matplotlib.pyplot as plt
 import torch
 import torch_geometric
 
-from GCN import DeepGraphCNN
-from graph_dataset import Panel_GraphDataset, features_GraphDataset
-from GCN_train import (
+from models.GCN import DeepGraphCNN
+from data_processing.graph_dataset import Panel_GraphDataset, features_GraphDataset
+from training.GCN_train import (
     monotonicity_loss, combined_path_loss, damage_map_loss,
     plot_training_history, plot_HI, build_and_save_ensemble, ensemble_predict,
 )
-from prognostic_criteria import monotonicity_criterion, trendability_criterion, prognosability_criterion
+from train_and_eval_helpers.prognostic_criteria import monotonicity_criterion, trendability_criterion, prognosability_criterion
 from config import (
     BETA_CONSTANT, ENABLE_DAMAGE_LOSS,ENABLE_PATH_LOSS, ENABLE_GLOBAL_LOSS, GRAPH_DATA_DIR, BO_TUNER_DIR, BO_SEARCH_RESULTS_DIR,
     DEFAULT_FREQ_INDEX, DEFAULT_GCN_FEATURES, DEFAULT_N_FEATURES, EPOCHS_PER_FOLD_GCN, CV_PANELS, MAX_TRIALS_GCN, TEST_PANEL, DAMAGE_LOSS_WEIGHT, TEST_RUN_DIR, VAL_PANELS,

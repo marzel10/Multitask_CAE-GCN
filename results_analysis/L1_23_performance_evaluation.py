@@ -33,14 +33,6 @@ import pickle
 import sys
 from pathlib import Path
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -48,15 +40,15 @@ import tensorflow as tf
 import torch
 import torch_geometric
 
-from graph_dataset import Panel_GraphDataset, features_GraphDataset
-from features_extractor import FeaturesExtractor, extract_diff_features_with_baseline
-from extract_shi import extract_shi
-from create_datastores import prepare_datastores
-from path_performance import _collect_ensemble_DI, CUSTOM_OBJECTS as AE_CUSTOM_OBJECTS
-from performance_accross_tests import _plot_damage_map_grid
-from imagining_alghoritm import P_AE, U, WCPDI
-from plot_panel import _draw_static_panel
-from prognostic_criteria import monotonicity_criterion, trendability_criterion, prognosability_criterion
+from data_processing.graph_dataset import Panel_GraphDataset, features_GraphDataset
+from data_processing.features_extractor import FeaturesExtractor, extract_diff_features_with_baseline
+from data_processing.extract_shi import extract_shi
+from data_processing.create_datastores import prepare_datastores
+from results_analysis.path_performance import _collect_ensemble_DI, CUSTOM_OBJECTS as AE_CUSTOM_OBJECTS
+from results_analysis.performance_accross_tests import _plot_damage_map_grid
+from train_and_eval_helpers.imagining_alghoritm import P_AE, U, WCPDI
+from train_and_eval_helpers.plot_panel import _draw_static_panel
+from train_and_eval_helpers.prognostic_criteria import monotonicity_criterion, trendability_criterion, prognosability_criterion
 from config import (
     PROJECT_ROOT, test_run_dir, SINGLE_FILE_PANELS, FREQUENCY_MAPPING, PANEL_123_SUBPANELS, FEATURES_CACHE_DIR, mat_file_path, FREQ_LABELS, METRIC_NAMES, TYPES_LABELS,
     LIFETIME_FRACTIONS, DAMAGE_MAP_N_PIXELS, PANEL_W, PANEL_H, CMAP_HEATMAP,

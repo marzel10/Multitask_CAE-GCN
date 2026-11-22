@@ -14,16 +14,7 @@ Other functions include:
 Example of usage is in the states_check.py 
 '''
 
-import sys
 from pathlib import Path
-
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from scipy.io import loadmat
 from scipy.signal import hilbert

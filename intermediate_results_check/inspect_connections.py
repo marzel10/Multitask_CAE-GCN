@@ -8,16 +8,7 @@ This file aims at vizualizing connection between paths on the panel and the grap
 - plot_panel_schematic: draws panel geometry details (sensors positions, damage points and dimensions)
 '''
 
-import sys
 from pathlib import Path
-
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -25,7 +16,7 @@ import matplotlib.patches as mpatches
 from matplotlib.colors import LinearSegmentedColormap
 import networkx as nx
 
-from weight_matrix import find_crossings, adjencency_matrix, find_crossings_by_area
+from train_and_eval_helpers.weight_matrix import find_crossings, adjencency_matrix, find_crossings_by_area
 from config import (
     mat_file_path, DEFAULT_FREQ_INDEX, CMAP_SEQUENTIAL, CMAP_BLUES,
     SENSOR_POSITIONS, SENSOR_PAIRS, PANEL_W, PANEL_H, DAMAGE_POINTS, CUSTOM_PALETTE
@@ -676,7 +667,7 @@ if __name__ == "__main__":
 
     visualize() 
     
-    from states import states
+    from data_processing.states import states
     st_123_43 = states(str(mat_file_path("123_43")))
     visualize_adjacency(st_123_43, state_idx=70, freq_idx=DEFAULT_FREQ_INDEX, plain=True)
 

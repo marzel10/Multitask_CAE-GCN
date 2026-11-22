@@ -2,19 +2,9 @@
  It loads the HI metrics and test metrics from the specified model directories, computes the WAE HI and its metrics, and saves the results to WAE_HI_metrics.pkl.
  Additionally, it appends the WAE HI metrics to an existing Excel file containing the HI metrics.'''
 import pickle
-import sys
-from pathlib import Path
 
 import numpy as np
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
-
-from prognostic_criteria import monotonicity_criterion, trendability_criterion, prognosability_criterion
+from train_and_eval_helpers.prognostic_criteria import monotonicity_criterion, trendability_criterion, prognosability_criterion
 from config import GRAPH_TYPES, FOLD_KEYS, TEST_RUN_DIR
 
 def main():

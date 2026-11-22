@@ -6,18 +6,9 @@ This file contains the following functions:
 - failed_sensor_at: Returns the sensor id (1-8) that has failed by GLOBAL `state` for this panel, or None if no failure applies
 - adjacency_matrix: Constructs adjacency matrix for different types of connections and excludes broken sensors
 '''
-import sys
 from pathlib import Path
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
-
-from states import states
+from data_processing.states import states
 import numpy as np
 import matplotlib.pyplot as plt
 from config import BETA_CONSTANT, STATE_START_INDICES, FAILURES_RECORD, mat_file_path, DEFAULT_FREQ_INDEX, CMAP_SEQUENTIAL, CMAP_BLUES, SENSOR_POSITIONS, SENSOR_PAIRS
@@ -128,7 +119,7 @@ def find_crossings():
 def find_crossings_by_area(n_pixels=None, panel_number=None, state=None, beta_constant=None):
     ''' This function computes the crossing strength between paths based on the area of overlap of their coverage regions.'''
 
-    from imagining_alghoritm import U
+    from train_and_eval_helpers.imagining_alghoritm import U
     from config import PANEL_W, PANEL_H, DEFAULT_N_PIXELS
 
     if n_pixels is None:

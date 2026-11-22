@@ -11,13 +11,14 @@ from pathlib import Path
 
 PANELS = [ "103", "104", "105", "109"]
 START_FREQ = {"104": 0}  # panel -> freq to resume from (freq 1-3 already ran for 104); defaults to 1
-_WORKER = Path(__file__).resolve().parent / "training" / "run_single_panel_serial.py"
+_PROJECT_ROOT = Path(__file__).resolve().parent
+_WORKER_MODULE = "training.run_single_panel_serial"
 
 for panel in PANELS:
     start_freq = START_FREQ.get(panel, 0)
     print(f"=== Starting raw BO sweep for TEST_PANEL={panel} (from freq={start_freq}) ===")
     t_begin = time.perf_counter()
-    result = subprocess.run([sys.executable, str(_WORKER), panel, str(start_freq)])
+    result = subprocess.run([sys.executable, "-m", _WORKER_MODULE, panel, str(start_freq)], cwd=_PROJECT_ROOT)
     t_end = time.perf_counter()
     print(f"=== Finished TEST_PANEL={panel} in {t_end - t_begin:.2f}s (exit code {result.returncode}) ===\n")
     if result.returncode != 0:

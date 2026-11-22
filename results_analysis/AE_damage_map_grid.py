@@ -1,23 +1,13 @@
 # This code generates heatmap on the panel using sHI from the autoencoder
 
-import sys
-from pathlib import Path
-
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-from imagining_alghoritm import P_AE, U, WCPDI
-from path_performance import load_cached, average_sHI_over_frequency, OUT_DIR, PANELS
-from plot_panel import _draw_static_panel
+from train_and_eval_helpers.imagining_alghoritm import P_AE, U, WCPDI
+from results_analysis.path_performance import load_cached, average_sHI_over_frequency, OUT_DIR, PANELS
+from train_and_eval_helpers.plot_panel import _draw_static_panel
 from config import DEFAULT_N_PIXELS, CMAP_HEATMAP, PANEL_H, PANEL_W, TEST_PANEL, PANELS, AE_RESULTS_DIR
 
 

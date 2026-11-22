@@ -25,27 +25,18 @@ Following plots are generated:
 
 import gc
 import pickle
-import sys
 from pathlib import Path
-
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 
-from ae_cross_validation_helper import ClipLayer, _CompatHeNormal, _normalization_mean_variance_axis, _predict_dataset
-from CNN_AE import KSparse, ExpandLastDim, SqueezeLastDim
-from AE_train import monotonicity_loss
-from create_datastores import prepare_datastores
-from prognostic_criteria import monotonicity_criterion, trendability_criterion, prognosability_criterion
+from training.ae_cross_validation_helper import ClipLayer, _CompatHeNormal, _normalization_mean_variance_axis, _predict_dataset
+from models.CNN_AE import KSparse, ExpandLastDim, SqueezeLastDim
+from training.AE_train import monotonicity_loss
+from data_processing.create_datastores import prepare_datastores
+from train_and_eval_helpers.prognostic_criteria import monotonicity_criterion, trendability_criterion, prognosability_criterion
 from config import BASE_PANELS, PROJECT_ROOT, TEST_PANEL, TEST_RUN_DIR, DEFAULT_N_PIXELS, FREQUENCY_MAPPING, LIFETIME_FRACTIONS, METRIC_NAMES, FOLD_KEYS, AE_RESULTS_DIR
 
 
@@ -342,10 +333,10 @@ def load_cached(out_dir=OUT_DIR):
         HI = pickle.load(f)
     return sHI, metrics, HI_metrics, HI
 
-from graph_performance import save_HI_metrics_xlsx, _palette_style
+from results_analysis.graph_performance import save_HI_metrics_xlsx, _palette_style
 
 def main(out_dir, recompute=True):
-    from AE_damage_map_grid import plot_damage_map_grid
+    from results_analysis.AE_damage_map_grid import plot_damage_map_grid
 
     cached = None if recompute else load_cached(out_dir=out_dir)
     if cached is not None:
@@ -384,5 +375,5 @@ def main(out_dir, recompute=True):
 if __name__ == "__main__":
     # Reads models from and writes results to the current TEST_PANEL's folder.
     # To run for another panel: set SHM_TEST_PANEL first, e.g. in PowerShell
-    #   $env:SHM_TEST_PANEL = "105"; python results_analysis/path_performance.py
+    #   $env:SHM_TEST_PANEL = "105"; python -m results_analysis.path_performance
     main(AE_RESULTS_DIR)

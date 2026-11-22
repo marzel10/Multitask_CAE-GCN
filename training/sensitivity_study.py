@@ -1,21 +1,11 @@
 import multiprocessing
-import sys
 import time
-from pathlib import Path
-
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 import numpy as np
 
-from BO_GCN import run_bayesian_optimization
+from training.BO_GCN import run_bayesian_optimization
 from config import TEST_RUN_DIR, BETA_CONSTANT, FREQUENCY_MAPPING, TYPES, OPTIMIZED_TYPES, OPTIMIZE_RAW
-from graph_performance import main as graph_performance_main
+from results_analysis.graph_performance import main as graph_performance_main
 
 
 freqs = np.arange(len(FREQUENCY_MAPPING))  # frequency indices to sweep over (0-based)

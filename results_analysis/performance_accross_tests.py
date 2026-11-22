@@ -7,16 +7,6 @@ HI_test_metrics.pkl, WAE_HI_metrics.pkl, WAE_HI_test_metrics.pkl, damage_maps.pk
 and sHI.pkl) -- no model is ever reloaded.
 '''
 import pickle
-import sys
-from pathlib import Path
-
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 import numpy as np
 import pandas as pd
@@ -24,8 +14,8 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from matplotlib.ticker import FuncFormatter
 
-from imagining_alghoritm import P_AE, U, WCPDI
-from plot_panel import _draw_static_panel
+from train_and_eval_helpers.imagining_alghoritm import P_AE, U, WCPDI
+from train_and_eval_helpers.plot_panel import _draw_static_panel
 from config import (
     PROJECT_ROOT, test_run_dir, FREQUENCY_MAPPING, METRIC_COLUMNS, MODEL_TYPES, GCN_TYPES,
     TYPES_LABELS, PANEL_W, PANEL_H, CMAP_HEATMAP, LIFETIME_FRACTIONS, DAMAGE_MAP_N_PIXELS,

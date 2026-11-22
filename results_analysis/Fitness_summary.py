@@ -13,16 +13,7 @@ runs may still be incomplete for some paths) to get one (model_type, frequency) 
 (fitness, monotonicity, prognosability, trendability) table, writes it to an
 .xlsx, and plots each metric vs frequency, one line per model type.
 '''
-import sys
 from pathlib import Path
-
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-for _sub in ("data_processing", "models", "train_and_eval_helpers", "training", "intermediate_results_check", "results_analysis"):
-    _p = str(_PROJECT_ROOT / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 import numpy as np
 import pandas as pd
