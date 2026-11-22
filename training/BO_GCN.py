@@ -256,7 +256,7 @@ class MyGCNTuner(kt.BayesianOptimization):
 
                     Hi_loss = monotonicity_loss(HI, data.y, data.panel) if self.global_loss else 0.0
                     path = combined_path_loss(HI, out, data.y, data.panel) if self.path_loss else 0.0
-                    map_loss = damage_map_loss(out, data.panel, beta=self.beta) if self.damage_loss else 0.0
+                    map_loss = damage_map_loss(out, data.panel, data.y, freq=self.freq, beta=self.beta) if self.damage_loss else 0.0
                     loss = Hi_loss + path + DAMAGE_LOSS_WEIGHT * map_loss
                     if self.damage_loss:
                         total_train_damage += map_loss.item()
@@ -279,7 +279,7 @@ class MyGCNTuner(kt.BayesianOptimization):
 
                         HI_loss = monotonicity_loss(HI, data.y, data.panel) if self.global_loss else 0.0
                         path = combined_path_loss(HI, out, data.y, data.panel) if self.path_loss else 0.0
-                        map_loss = damage_map_loss(out, data.panel, beta=self.beta) if self.damage_loss else 0.0
+                        map_loss = damage_map_loss(out, data.panel, data.y, freq=self.freq, beta=self.beta) if self.damage_loss else 0.0
                         loss = HI_loss + path + DAMAGE_LOSS_WEIGHT * map_loss
 
                         if self.damage_loss:
@@ -316,7 +316,7 @@ class MyGCNTuner(kt.BayesianOptimization):
                 for data in val_loader:
                     data = data.to(self.device)
                     out, _ = model(data.x, data.edge_index, data.batch, data.edge_weight)
-                    total_damage_loss += damage_map_loss(out,  data.panel, beta=self.beta).item()
+                    total_damage_loss += damage_map_loss(out,  data.panel, data.y, freq=self.freq, beta=self.beta).item()
                     n_batches += 1
             fold_damage.append(total_damage_loss / max(n_batches, 1))
 
@@ -402,7 +402,7 @@ def _retrain_fold(best_params, val_panel, freq, out_dir, epochs, seed=42, type=T
             out, HI = model(data.x, data.edge_index, data.batch, data.edge_weight)
             global_loss = monotonicity_loss(HI, data.y, data.panel) if add_global_loss else 0.0
             path_loss = combined_path_loss(HI, out, data.y, data.panel) if add_path_loss else 0.0
-            damage_loss = damage_map_loss(out, data.panel, beta=beta) if add_damage_loss else 0.0
+            damage_loss = damage_map_loss(out, data.panel, data.y, freq=freq, beta=beta) if add_damage_loss else 0.0
             loss = global_loss + path_loss + DAMAGE_LOSS_WEIGHT * damage_loss 
             
             loss.backward()
@@ -422,7 +422,7 @@ def _retrain_fold(best_params, val_panel, freq, out_dir, epochs, seed=42, type=T
                 out, HI = model(data.x, data.edge_index, data.batch, data.edge_weight)
                 global_loss = monotonicity_loss(HI, data.y, data.panel) if add_global_loss else 0.0
                 path_loss = combined_path_loss(HI, out, data.y, data.panel) if add_path_loss else 0.0
-                damage_loss = damage_map_loss(out, data.panel, beta=beta) if add_damage_loss else 0.0
+                damage_loss = damage_map_loss(out, data.panel, data.y, freq=freq, beta=beta) if add_damage_loss else 0.0
 
                 loss = global_loss + path_loss + DAMAGE_LOSS_WEIGHT * damage_loss
 
@@ -620,8 +620,8 @@ def run_bayesian_optimization(freq=DEFAULT_FREQ_INDEX, max_trials=MAX_TRIALS_GCN
         global_loss = ENABLE_GLOBAL_LOSS
     big_latent = True 
 
-    if type=="peak" and raw_features:
-        do_BO = True
+    if type=="peak":
+        do_BO = False
     else:
         do_BO = False
 

@@ -19,6 +19,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 import datetime
 import os
+import pickle
 
 from GCN import DeepGraphCNN
 from graph_dataset import features_GraphDataset
@@ -31,7 +32,8 @@ from config import (
     BETA_CONSTANT, DEFAULT_BATCH_SIZE, EPOCHS_PER_FOLD_GCN, GCN_MODELS_DIR, GRAPH_DATA_DIR, CROSS_VALIDATION_RESULTS_DIR,
     DEFAULT_FREQ_INDEX,
     DEFAULT_N_FEATURES, BASE_PANELS, TEST_PANEL,
-    SENSOR_POSITIONS, SENSOR_PAIRS, DAMAGE_POINTS, PANEL_W, PANEL_H, VAL_PANELS, LR
+    SENSOR_POSITIONS, SENSOR_PAIRS, DAMAGE_POINTS, PANEL_W, PANEL_H, TOTAL_STATES, VAL_PANELS, LR,
+    AE_RESULTS_DIR, PANELS
 )
 
 def monotonicity_loss(values, state_ids, panel_ids):
@@ -99,10 +101,10 @@ def _damage_map_geometry(n_pixels, beta_constant=BETA_CONSTANT):
         W_maps.append(np.where(R < path_beta, 1 - R / path_beta, 0.0))
     W_stack = np.stack(W_maps, axis=0)  # (num_paths, nx, ny)
 
-    result = (dx, U_arr, peak_U, W_stack)
+    result = (dx, U_arr, peak_U, W_stack, X, Y)
     _DAMAGE_MAP_GEOMETRY_CACHE[key] = result
     return result
-
+'''
 def damage_map_loss(out, panel_ids, n_pixels=1000, beta=BETA_CONSTANT):
     out = out.reshape(-1)
     num_paths = len(SENSOR_PAIRS)
@@ -110,7 +112,7 @@ def damage_map_loss(out, panel_ids, n_pixels=1000, beta=BETA_CONSTANT):
     path_out = out.reshape(batch_size, num_paths)
 
     
-    dx, U_arr, peak_U, W_stack = _damage_map_geometry(n_pixels,beta_constant=beta)
+    dx, U_arr, peak_U, W_stack, X, Y = _damage_map_geometry(n_pixels,beta_constant=beta)
     W_stack = torch.tensor(W_stack, dtype=out.dtype, device=out.device)
     U_map = torch.tensor(U_arr, dtype=out.dtype, device=out.device)
 
@@ -138,7 +140,74 @@ def damage_map_loss(out, panel_ids, n_pixels=1000, beta=BETA_CONSTANT):
         loss = loss + ((diff + 10.0) ** 2 - 100.0)
 
     return loss
+'''
+def multivariate_guassian(x, mean, cov, x_impact):
+    exponent = -((x[0]-x_impact[0])**2+(x[1]-x_impact[1])**2)/(2*cov**2)
+    gaussian = -mean*torch.exp(torch.tensor(exponent))
+    return gaussian
 
+def cov_evelution(N, alpha):
+    cov = alpha * 1/(1-N)
+    return cov
+
+_CAE_HI_CACHE = {}
+
+def _load_cae_HI(freq=DEFAULT_FREQ_INDEX):
+    '''{panel: HI curve (one value per state)} from the CAE ensemble fold, written by path_performance.py.
+    HI.pkl is fold x freq x panel -> 1D array (state order), panel axis ordered as config.PANELS.'''
+    if freq in _CAE_HI_CACHE:
+        return _CAE_HI_CACHE[freq]
+    with open(AE_RESULTS_DIR / "HI.pkl", "rb") as f:
+        HI = pickle.load(f)
+    ensemble_fold = HI[-1]
+    result = {panel: np.asarray(ensemble_fold[freq][i]) for i, panel in enumerate(PANELS)}
+    _CAE_HI_CACHE[freq] = result
+    return result
+
+def damage_map_loss(out, panel_ids, state_ids, freq, n_pixels=10000, beta=BETA_CONSTANT, alpha=0.01, cycles_per_state=5000):
+    out = out.reshape(-1)
+    num_paths = len(SENSOR_PAIRS)
+    batch_size = out.shape[0] // num_paths
+    path_out = out.reshape(batch_size, num_paths)
+
+    dx, U_arr, peak_U, W_stack, X, Y = _damage_map_geometry(n_pixels,beta_constant=beta)
+    W_stack = torch.tensor(W_stack, dtype=out.dtype, device=out.device)
+    U_map = torch.tensor(U_arr, dtype=out.dtype, device=out.device)
+
+    valid_mask = U_map > 0 # Check which pixels are under the influence of at least one sensor path
+    U_safe = torch.where(valid_mask, U_map, torch.ones_like(U_map))
+
+    cae_HI = _load_cae_HI(freq)
+
+    loss = out.sum() * 0.0
+
+    for i in range(batch_size):
+
+        panel_number = int(panel_ids[i].item())
+        state_number = int(state_ids[i].item())
+
+        # spread of the label Gaussian grows with fatigue life: N = cycles so far, life_N = cycles at the last state
+        N = state_number * cycles_per_state
+        life_N = TOTAL_STATES[str(panel_number)] * cycles_per_state
+        life_fraction = N / life_N 
+        cov = cov_evelution(life_fraction, alpha=alpha)
+
+        # mean evaluation based on HI extracted by CAE (path_performance_results\HI.pkl)
+        mean = float(cae_HI[panel_number][state_number])
+
+        # multiply sub-HI by its path's W map, then sum over all paths to get the panel's P map
+        P_map = (path_out[i].view(-1, 1, 1) * W_stack).sum(dim=0)
+        WCPDI_map = P_map  / (U_safe / peak_U)
+
+        # label map: Gaussian centred on the damage point
+        damage_point = DAMAGE_POINTS[panel_number]
+        label_map = multivariate_guassian(np.array([X, Y]), np.abs(mean), cov, damage_point) + mean
+        label_map = label_map.to(dtype=out.dtype, device=out.device)
+
+        # MSE over the pixels covered by at least one sensor path
+        loss = loss + ((WCPDI_map - label_map) ** 2)[valid_mask].mean()
+
+    return loss / batch_size
 
 def plot_training_history(hist_dict, nr_epochs,save_dir=None):
 
@@ -260,8 +329,8 @@ def train_with_features(f=DEFAULT_FREQ_INDEX,val_panel=VAL_PANELS,n_epochs=EPOCH
 
             global_loss = monotonicity_loss(HI, data.y, data.panel)
             path_loss = combined_path_loss(HI, out, data.y, data.panel)
-            damage_loss = damage_map_loss(out, data.panel)
-            loss = global_loss + path_loss #+ damage_loss
+            damage_loss = damage_map_loss(out, data.panel, data.y, freq=f)
+            loss = global_loss + path_loss + damage_loss
 
 
             loss.backward()
@@ -289,8 +358,8 @@ def train_with_features(f=DEFAULT_FREQ_INDEX,val_panel=VAL_PANELS,n_epochs=EPOCH
 
                 global_val_loss = monotonicity_loss(HI_val, val_data.y, val_data.panel)
                 path_val_loss = combined_path_loss(HI_val, out_val, val_data.y, val_data.panel)
-                damage_val_loss = damage_map_loss(out_val,  val_data.panel)
-                loss_val = global_val_loss + path_val_loss #+ damage_val_loss
+                damage_val_loss = damage_map_loss(out_val,  val_data.panel, val_data.y, freq=f)
+                loss_val = global_val_loss + path_val_loss + damage_val_loss
 
                 total_val_loss += loss_val.item()
                 total_global_val_loss += global_val_loss.item()
