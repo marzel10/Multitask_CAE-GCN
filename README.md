@@ -58,9 +58,9 @@ runs for different test panels are computed separately.
 To reproduce the results (after the dataset has been downloaded to the `data_processing/` folder), run
 from the project root:
 
-    python run_cross_test.py                                   # full pipeline, every test panel
-    python -m results_analysis.performance_accross_tests       # summary across test panels
-    python -m results_analysis.L1_23_performance_evaluation    # evaluation on unseen L1-23 damage
+    python run_cross_test.py                                               # full pipeline, every test panel
+    python -m results_analysis.performance_accross_tests                   # summary across test panels
+    python -m results_analysis.L1_23_performance_evaluation --bench-103    # evaluation on unseen L1-23 damage
 
 
 To run a script for a test panel other than the default, set the environment variable first, e.g. in PowerShell:
